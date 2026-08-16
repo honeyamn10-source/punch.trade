@@ -30,11 +30,14 @@ from .broker.paper import PaperBroker
 from .engine import build_runners
 from .feed import LiveFeed
 from .strategies import STRATEGIES, get_strategy
+from .proxy import router as proxy_router
 from . import vault
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data")
 SIGNALS_LOG = os.path.join(DATA_DIR, "signals.json")
 ORDERS_LOG = os.path.join(DATA_DIR, "orders.json")
+POSITIONS_LOG = os.path.join(DATA_DIR, "positions.json")
+closed_positions: List[dict] = []
 
 app = FastAPI(title="punch.trade", version="0.1.0")
 
@@ -134,9 +137,17 @@ _loop: Optional[asyncio.AbstractEventLoop] = None
 
 @app.on_event("startup")
 async def startup() -> None:
-    global feed, _loop
+    global feed, _loop, closed_positions
     os.makedirs(DATA_DIR, exist_ok=True)
     _loop = asyncio.get_running_loop()
+
+    # restore the closed-position ledger for analytics
+    if os.path.exists(POSITIONS_LOG):
+        try:
+            with open(POSITIONS_LOG, "r", encoding="utf-8") as f:
+                closed_positions = [json.loads(line) for line in f if line.strip()]
+        except Exception:
+            closed_positions = []
 
     # restore broker sessions from the encrypted vault
     for broker_name in vault.brokers():
@@ -171,6 +182,8 @@ def on_signal(signal: dict) -> None:
 
 
 def on_position_close(position: dict) -> None:
+    closed_positions.append(position)
+    _append_json(POSITIONS_LOG, position)
     _loop.create_task(hub.broadcast({"type": "position", "data": position}))
 
 
@@ -201,7 +214,14 @@ def run_backtest(strategy_id: str, req: BacktestReq, token: Optional[str] = None
     strategy = get_strategy(strategy_id)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Unknown strategy")
-    adapter = brokers.get(req.broker)
+    if req.broker in brokers.adapters:
+        adapter = brokers.adapters[req.broker]
+    elif req.broker == "binance":
+        # Public OHLCV needs no API keys — backtests work without connecting.
+        adapter = CCXTBroker("", "", testnet=False)
+    else:
+        raise HTTPException(status_code=400,
+                            detail=f"Broker '{req.broker}' not connected. Connect it first.")
     try:
         bars = adapter.get_historical_bars(strategy["symbol"], req.interval, req.days)
     except BrokerError as e:
@@ -334,6 +354,54 @@ def last_signals(token: Optional[str] = None) -> dict:
     return {"signals": list(hub.signals)}
 
 
+@app.get("/api/signals/history")
+def signal_history(token: Optional[str] = None) -> dict:
+    require_token(token)
+    rows = []
+    if os.path.exists(SIGNALS_LOG):
+        with open(SIGNALS_LOG, "r", encoding="utf-8") as f:
+            rows = [json.loads(line) for line in f if line.strip()]
+    return {"signals": rows}
+
+
+@app.get("/api/orders/history")
+def order_history(token: Optional[str] = None) -> dict:
+    require_token(token)
+    rows = []
+    if os.path.exists(ORDERS_LOG):
+        with open(ORDERS_LOG, "r", encoding="utf-8") as f:
+            rows = [json.loads(line) for line in f if line.strip()]
+    return {"orders": rows}
+
+
+@app.get("/api/analytics")
+def analytics(token: Optional[str] = None) -> dict:
+    """Dashboard aggregate: performance from the closed-position ledger."""
+    require_token(token)
+    wins = [p for p in closed_positions if (p.get("pnl_pct") or 0) > 0]
+    losses = [p for p in closed_positions if (p.get("pnl_pct") or 0) <= 0]
+    equity = 0.0
+    curve = []
+    for p in sorted(closed_positions, key=lambda x: x.get("opened_at", 0)):
+        equity += p.get("pnl_pct", 0.0)
+        curve.append({"ts": p.get("opened_at", 0), "equity": round(equity, 2)})
+    open_positions = []
+    try:
+        open_positions = brokers.adapters["paper"].get_positions()
+    except Exception:
+        pass
+    return {
+        "closed": len(closed_positions),
+        "wins": len(wins),
+        "losses": len(losses),
+        "winRate": round(len(wins) / len(closed_positions) * 100, 1) if closed_positions else 0.0,
+        "netPnlPct": round(sum(p.get("pnl_pct", 0.0) for p in closed_positions), 2),
+        "openPositions": len([p for p in open_positions if p.get("status") == "open"]),
+        "equityCurve": curve,
+        "recentCloses": list(reversed(closed_positions[-10:])),
+    }
+
+
 # ------------------------------------------------------------- WS -------
 @app.websocket("/ws/signals")
 async def ws_signals(ws: WebSocket) -> None:
@@ -370,3 +438,13 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__
 @app.get("/demo")
 def demo_page() -> FileResponse:
     return FileResponse(os.path.join(os.path.dirname(__file__), "..", "static", "demo.html"))
+
+
+@app.get("/dashboard")
+def dashboard_page() -> FileResponse:
+    return FileResponse(os.path.join(os.path.dirname(__file__), "..", "static", "dashboard.html"))
+
+
+# OpenAI-compatible -> Ollama proxy (qwen thinking fix), mounted last so
+# it never shadows the /api routes.
+app.include_router(proxy_router)

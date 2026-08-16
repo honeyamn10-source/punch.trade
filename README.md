@@ -60,6 +60,11 @@ python run.py
 3. The overlay appears top-right of the chart. Signals land over WebSocket;
    hit **PUNCH** to place a bracket order (entry + TP + SL) on the paper broker.
 
+Dashboard: `http://127.0.0.1:8000/dashboard` — the zing.trade-style window on
+everything: win rate, net PnL, equity curve, live signals, open/closed
+positions, order audit log, broker connections, and on-demand backtests per
+strategy.
+
 Backtests (real numbers on real data once a broker is connected):
 
 ```powershell

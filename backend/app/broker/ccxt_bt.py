@@ -32,11 +32,13 @@ class CCXTBroker(BrokerAdapter):
             raise BrokerError("ccxt not installed. pip install ccxt")
         self.testnet = testnet
         params: Dict = {
-            "apiKey": api_key,
-            "secret": api_secret,
             "enableRateLimit": True,
             "options": {"defaultType": "spot"},
         }
+        if api_key:
+            params["apiKey"] = api_key
+        if api_secret:
+            params["secret"] = api_secret
         if testnet:
             params["sandbox"] = True
         self._ex = ccxt.binance(params)
