@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "punch.trade",
+  "version": "0.1.0",
+  "description": "Signal overlay + one-tap bracket execution on your broker charts (Kite, Binance, demo).",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*",
+    "ws://127.0.0.1:8000/*",
+    "ws://localhost:8000/*",
+    "https://kite.zerodha.com/*",
+    "https://*.binance.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "punch.trade" },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1:8000/demo*",
+        "http://localhost:8000/demo*",
+        "https://kite.zerodha.com/*",
+        "https://*.binance.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

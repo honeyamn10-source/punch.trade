@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Demo Broker — fake chart page for punch.trade</title>
+<style>
+  body { margin: 0; font-family: -apple-system, Segoe UI, sans-serif; background: #0d1117; color: #e6edf3; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: #161b22; border-bottom: 1px solid #30363d; }
+  header h1 { font-size: 16px; margin: 0; }
+  header .tag { font-size: 11px; color: #8b949e; }
+  nav { display: flex; gap: 8px; }
+  nav button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  nav button.active { background: #1f6feb; border-color: #1f6feb; }
+  #chart-area { position: relative; height: 420px; margin: 16px; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; background: #0d1117; }
+  #chart-canvas { width: 100%; height: 100%; display: block; }
+  footer { padding: 8px 16px; font-size: 11px; color: #8b949e; }
+  #status { font-size: 11px; color: #3fb950; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Demo Broker <span class="tag">simulates a real broker SPA (like Kite web / TradingView)</span></h1>
+  <nav id="symbols"></nav>
+  <span id="status">chart loads after JS render, like a real SPA</span>
+</header>
+<div id="chart-area">
+  <canvas id="chart-canvas"></canvas>
+</div>
+<footer>This page exists so you can test the punch.trade overlay without a real account.
+The real extension also runs on kite.zerodha.com and Binance.</footer>
+
+<script>
+const SYMBOLS = { "RELIANCE": 2950, "TCS": 4100, "HDFCBANK": 1650, "INFY": 1550 };
+const N = 80;
+let series = null;
+let symbol = location.hash.replace("#", "") || "RELIANCE";
+if (!SYMBOLS[symbol]) symbol = "RELIANCE";
+
+function buildSeries(base) {
+  const out = [];
+  let price = base;
+  for (let i = 0; i < N; i++) {
+    const drift = 0.0004, shock = (Math.random() - 0.5) * 0.03;
+    const open = price;
+    const close = Math.max(1, price * (1 + drift + shock));
+    out.push({ o: open, h: Math.max(open, close) * (1 + Math.random() * 0.005),
+               l: Math.min(open, close) * (1 - Math.random() * 0.005), c: close });
+    price = close;
+  }
+  return out;
+}
+
+function draw() {
+  const canvas = document.getElementById("chart-canvas");
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  if (!series) return;
+  const lo = Math.min(...series.map(b => b.l)), hi = Math.max(...series.map(b => b.h));
+  const pad = (hi - lo) * 0.08;
+  const y = v => h - ((v - lo + pad) / (hi - lo + 2 * pad)) * h;
+  const x = i => (i / (N - 1)) * w;
+  const bw = w / N * 0.55;
+  for (let i = 0; i < series.length; i++) {
+    const b = series[i], up = b.c >= b.o;
+    ctx.strokeStyle = ctx.fillStyle = up ? "#26a69a" : "#ef5350";
+    ctx.beginPath(); ctx.moveTo(x(i), y(b.h)); ctx.lineTo(x(i), y(b.l)); ctx.stroke();
+    ctx.fillRect(x(i) - bw / 2, y(Math.max(b.o, b.c)), bw, Math.max(1, Math.abs(y(b.o) - y(b.c))));
+  }
+  // current price line
+  const last = series[series.length - 1].c;
+  ctx.strokeStyle = "#ffd166"; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(0, y(last)); ctx.lineTo(w, y(last)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#ffd166"; ctx.font = "12px monospace";
+  ctx.fillText("LTP " + last.toFixed(2), 8, y(last) - 6);
+}
+
+function renderSymbols() {
+  const nav = document.getElementById("symbols");
+  nav.innerHTML = "";
+  for (const s of Object.keys(SYMBOLS)) {
+    const b = document.createElement("button");
+    b.textContent = s;
+    b.className = s === symbol ? "active" : "";
+    b.onclick = () => { location.hash = s; };
+    nav.appendChild(b);
+  }
+}
+
+// SPA behaviour: hash change re-renders without a full page reload —
+// exactly like switching symbols on a real broker site.
+window.addEventListener("hashchange", () => {
+  const s = location.hash.replace("#", "");
+  if (SYMBOLS[s] && s !== symbol) { symbol = s; series = null; startChart(); }
+});
+
+function startChart() {
+  renderSymbols();
+  document.getElementById("status").textContent = "chart rendered for " + symbol;
+  // simulate the SPA delay before the chart element exists
+  setTimeout(() => {
+    series = buildSeries(SYMBOLS[symbol]);
+    draw();
+    document.getElementById("chart-area").dataset.chartContainer = "1";
+  }, 400);
+}
+
+// live-ish updates
+setInterval(() => {
+  if (!series) return;
+  const last = series[series.length - 1];
+  const price = last.c * (1 + (Math.random() - 0.5) * 0.004);
+  series.push({ o: last.c, h: Math.max(last.c, price), l: Math.min(last.c, price), c: price });
+  series.shift();
+  draw();
+}, 2000);
+
+window.addEventListener("resize", draw);
+startChart();
+</script>
+</body>
+</html>

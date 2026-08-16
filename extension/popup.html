@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>punch.trade</title>
+<style>
+  body { width: 340px; margin: 0; font-family: -apple-system, "Segoe UI", sans-serif;
+         background: #0d1117; color: #e6edf3; font-size: 12px; }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+           border-bottom: 1px solid #30363d; font-weight: 700; }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: #f85149; }
+  header .dot.on { background: #3fb950; }
+  header .tag { margin-left: auto; color: #8b949e; font-weight: 400; font-size: 11px; }
+  section { padding: 10px 12px; border-bottom: 1px solid #21262d; }
+  section h3 { margin: 0 0 8px; font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .08em; }
+  label { display: block; margin: 6px 0 2px; color: #8b949e; font-size: 11px; }
+  input, select { width: 100%; padding: 6px 8px; background: #161b22; color: #e6edf3;
+                  border: 1px solid #30363d; border-radius: 6px; box-sizing: border-box; }
+  button { margin-top: 8px; padding: 6px 12px; border: 0; border-radius: 6px; cursor: pointer;
+           background: #21262d; color: #e6edf3; font-weight: 600; }
+  button.primary { background: #1f6feb; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row label { margin: 0; display: flex; gap: 4px; align-items: center; }
+  .row input[type=checkbox] { width: auto; }
+  .msg { margin-top: 8px; font-size: 11px; min-height: 14px; }
+  .msg.ok { color: #3fb950; } .msg.err { color: #f85149; }
+  .status-row { display: flex; justify-content: space-between; padding: 3px 0; }
+  .status-row .st { color: #3fb950; } .status-row .sf { color: #f85149; }
+  #positions div { padding: 3px 0; font-family: ui-monospace, monospace; font-size: 11px; }
+  details { margin-top: 6px; } summary { cursor: pointer; color: #8b949e; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <span>punch.trade</span>
+  <span class="tag" id="connState">connecting…</span>
+</header>
+
+<section>
+  <h3>Connection</h3>
+  <label>Server</label>
+  <input id="server" placeholder="http://127.0.0.1:8000">
+  <label>Token</label>
+  <input id="token" placeholder="punch-demo-token">
+  <label>Execute through</label>
+  <select id="broker">
+    <option value="paper">paper (local sim)</option>
+    <option value="kite">kite (Zerodha)</option>
+    <option value="binance">binance (CCXT)</option>
+    <option value="openalgo">openalgo</option>
+  </select>
+  <button class="primary" id="save">Save</button>
+  <div class="msg" id="saveMsg"></div>
+</section>
+
+<section>
+  <h3>Broker status</h3>
+  <div id="status"><div>—</div></div>
+  <button id="refreshStatus">Refresh</button>
+</section>
+
+<section>
+  <h3>Positions</h3>
+  <div id="positions">—</div>
+  <button id="refreshPositions">Refresh</button>
+</section>
+
+<details>
+  <summary>Connect a real broker</summary>
+  <section style="border:0">
+    <h3>Zerodha Kite</h3>
+    <label>API key</label>
+    <input id="kiteKey" placeholder="from developers.zerodha.com">
+    <button id="kiteUrl">Get login URL</button>
+    <label>Request token (from the redirect URL)</label>
+    <input id="kiteToken">
+    <label>API secret</label>
+    <input id="kiteSecret">
+    <button id="kiteConnect">Connect Kite</button>
+    <div class="msg" id="kiteMsg"></div>
+
+    <h3>Binance (testnet by default)</h3>
+    <label>API key</label>
+    <input id="bnKey">
+    <label>API secret</label>
+    <input id="bnSecret">
+    <div class="row"><label><input type="checkbox" id="bnTestnet" checked> testnet (fake money)</label></div>
+    <button id="bnConnect">Connect Binance</button>
+    <div class="msg" id="bnMsg"></div>
+
+    <h3>OpenAlgo (34 Indian brokers)</h3>
+    <label>OpenAlgo host</label>
+    <input id="oaHost" placeholder="http://127.0.0.1:5000">
+    <label>API key</label>
+    <input id="oaKey">
+    <label>Broker</label>
+    <input id="oaBroker" placeholder="zerodha">
+    <button id="oaConnect">Connect OpenAlgo</button>
+    <div class="msg" id="oaMsg"></div>
+  </section>
+</details>
+
+<script src="popup.js"></script>
+</body>
+</html>
