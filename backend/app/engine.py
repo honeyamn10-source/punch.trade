@@ -17,22 +17,23 @@ import time
 import uuid
 from typing import Dict, List, Optional
 
-from .strategies import STRATEGIES, compute_indicator, condition_met, get_strategy
+from .strategies import STRATEGIES, compute_indicator, condition_met, get_strategy, target_levels
 
 
 class Signal:
     __slots__ = ("id", "strategy_id", "strategy_name", "symbol", "side",
-                 "entry", "target_price", "stop_loss", "ts")
+                 "entry", "targets", "target_price", "stop_loss", "ts")
 
     def __init__(self, strategy_id: str, strategy_name: str, symbol: str,
-                 side: str, entry: float, target_price: float, stop_loss: float):
+                 side: str, entry: float, targets: List[float], stop_loss: float):
         self.id = uuid.uuid4().hex[:12]
         self.strategy_id = strategy_id
         self.strategy_name = strategy_name
         self.symbol = symbol
         self.side = side
         self.entry = entry
-        self.target_price = target_price
+        self.targets = targets
+        self.target_price = targets[0]  # primary target, for brokers with single-bracket support
         self.stop_loss = stop_loss
         self.ts = time.time()
 
@@ -44,6 +45,7 @@ class Signal:
             "symbol": self.symbol,
             "side": self.side,
             "entry": round(self.entry, 2),
+            "targets": [round(t, 2) for t in self.targets],
             "targetPrice": round(self.target_price, 2),
             "stopLoss": round(self.stop_loss, 2),
             "ts": self.ts,
@@ -71,26 +73,27 @@ class StrategyRunner:
         entry = self.strategy["entry"]
         exit_cfg = self.strategy["exit"]
         series = compute_indicator(entry["indicator"], entry["period"], bars)
+        closes = [b["close"] for b in bars]
 
         if state == "active":
-            if condition_met(exit_cfg, series, index):
+            if condition_met(exit_cfg, series, index, closes, bars):
                 self.state[symbol] = "idle"
             return None
 
-        if not condition_met(entry, series, index):
+        if not condition_met(entry, series, index, closes, bars):
             return None
 
         self.state[symbol] = "active"
         close = bars[index]["close"]
-        tp_pct = self.strategy.get("tp_pct", 2.0)
         sl_pct = self.strategy.get("sl_pct", 1.0)
+        targets = [close * (1 + pct / 100) for pct in target_levels(self.strategy)]
         return Signal(
             strategy_id=self.strategy["id"],
             strategy_name=self.strategy["name"],
             symbol=symbol,
             side="buy",
             entry=close,
-            target_price=close * (1 + tp_pct / 100),
+            targets=targets,
             stop_loss=close * (1 - sl_pct / 100),
         )
 

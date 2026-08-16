@@ -25,6 +25,9 @@ Key design decisions (from the original architecture brief):
 - **Declarative strategies**: configs reference a fixed indicator/condition
   library — no arbitrary code execution, safe to share.
 - **Adapter pattern**: one internal interface, one adapter per broker.
+- **Multi-level take-profit**: signals carry TP1/TP2/TP3; the backtester and
+  paper broker close equal fractions per level (SL always booked first in
+  backtests). Brokers with single-bracket support use TP1.
 
 ## Repo layout
 
@@ -33,8 +36,9 @@ backend/          FastAPI server (REST + WebSocket signal feed)
   app/
     engine.py     StrategyRunner — bar-driven, per-symbol dedup state
     backtest.py   replay of engine against historical bars
-    indicators.py SMA / EMA / RSI + cross conditions (no deps)
-    strategies.py declarative strategy configs
+    indicators.py SMA / EMA / RSI / MACD / Bollinger / Donchian / VWAP (no deps)
+    strategies.py declarative strategy configs (9 shipped: RSI, EMA, SMA,
+                 MACD, Bollinger, Donchian/turtle, VWAP, golden cross, BTC RSI)
     feed.py       live feeds: paper / binance (CCXT polling) / kite (ticks)
     broker/       paper.py · kite.py · ccxt_bt.py · openalgo.py
     vault.py      Fernet-encrypted broker token storage
@@ -62,8 +66,9 @@ python run.py
 
 Dashboard: `http://127.0.0.1:8000/dashboard` — the zing.trade-style window on
 everything: win rate, net PnL, equity curve, live signals, open/closed
-positions, order audit log, broker connections, and on-demand backtests per
-strategy.
+positions, order audit log, broker connections, a strategy **leaderboard**
+(backtested vs the paper feed, ranked by Sharpe — every losing exit included,
+no cherry-picking), and on-demand backtests per strategy.
 
 Backtests (real numbers on real data once a broker is connected):
 
@@ -133,7 +138,8 @@ Execution always routes through the selected broker — switch in the popup
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/strategies` | strategy list |
-| `POST /api/strategies/{id}/backtest` | real backtest stats (win rate, drawdown) |
+| `GET /api/strategies/leaderboard` | all strategies backtested + ranked (Sharpe, win rate, PF, DD) |
+| `POST /api/strategies/{id}/backtest` | real backtest stats (win rate, drawdown, Sharpe, PF, avg win/loss) |
 | `POST /api/orders` | place bracket (entry+TP+SL) on the chosen broker |
 | `GET /api/positions` · `GET /api/fills` | reconciliation / audit |
 | `POST /api/broker/{kite,binance,openalgo}/connect` | broker onboarding |

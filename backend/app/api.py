@@ -29,7 +29,7 @@ from .broker.openalgo import OpenAlgoAdapter
 from .broker.paper import PaperBroker
 from .engine import build_runners
 from .feed import LiveFeed
-from .strategies import STRATEGIES, get_strategy
+from .strategies import STRATEGIES, get_strategy, target_levels
 from .proxy import router as proxy_router
 from . import vault
 
@@ -149,6 +149,14 @@ async def startup() -> None:
         except Exception:
             closed_positions = []
 
+    # restore the signal ledger so /ws and /api/strategies/leaderboard see it
+    if os.path.exists(SIGNALS_LOG) and not hub.signals:
+        try:
+            with open(SIGNALS_LOG, "r", encoding="utf-8") as f:
+                hub.signals = [json.loads(line) for line in f if line.strip()][-100:]
+        except Exception:
+            pass
+
     # restore broker sessions from the encrypted vault
     for broker_name in vault.brokers():
         try:
@@ -166,6 +174,8 @@ async def startup() -> None:
         except Exception as e:
             print(f"[startup] failed to restore {broker_name}: {e}")
 
+    print(f"[startup] telegram alerts: {'ON' if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID else 'OFF'}")
+
     feed = LiveFeed(
         brokers.adapters["paper"],
         build_runners(),
@@ -179,6 +189,25 @@ def on_signal(signal: dict) -> None:
     hub.signals.append(signal)
     _append_json(SIGNALS_LOG, signal)
     _loop.create_task(hub.broadcast({"type": "signal", "data": signal}))
+    if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID:
+        _loop.create_task(_telegram_push(signal))
+
+
+async def _telegram_push(signal: dict) -> None:
+    """Optional Telegram alert (set PUNCH_TELEGRAM_BOT_TOKEN + CHAT_ID)."""
+    import httpx
+
+    levels = " → ".join(str(t) for t in signal.get("targets", [signal.get("targetPrice")]))
+    text = (f"PUNCH.TRADE signal\n{signal['symbol']} {signal['side'].upper()}\n"
+            f"entry {signal['entry']} | TP {levels} | SL {signal['stopLoss']}\n"
+            f"strategy: {signal['strategyName']}")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
+                json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text})
+    except Exception as e:
+        print(f"[telegram] push failed: {e}")
 
 
 def on_position_close(position: dict) -> None:
@@ -206,6 +235,37 @@ def health() -> dict:
 def strategies(token: Optional[str] = None) -> dict:
     require_token(token)
     return {"strategies": STRATEGIES}
+
+
+_leaderboard_cache: Dict[str, dict] = {}
+
+
+@app.get("/api/strategies/leaderboard")
+def strategy_leaderboard(token: Optional[str] = None) -> dict:
+    """Ranked per-strategy backtest stats (paper source, cached 60s)."""
+    require_token(token)
+    now = time.time()
+    if _leaderboard_cache and now - _leaderboard_cache.get("ts", 0) < 60:
+        return _leaderboard_cache
+
+    adapter = brokers.adapters["paper"]
+    rows = []
+    for s in STRATEGIES:
+        try:
+            bars = adapter.get_historical_bars(s["symbol"], "5m", 30)
+            stats = backtest(s, bars)
+            if "error" in stats:
+                continue
+            rows.append({"id": s["id"], "name": s["name"], "symbol": s["symbol"],
+                         **{k: stats[k] for k in ("winRate", "netReturnPct", "maxDrawdownPct",
+                                                   "sharpe", "profitFactor", "trades")}})
+        except Exception:
+            continue
+    rows.sort(key=lambda r: (r["sharpe"], r["winRate"]), reverse=True)
+    result = {"ts": now, "rows": rows}
+    _leaderboard_cache.clear()
+    _leaderboard_cache.update(result)
+    return result
 
 
 @app.post("/api/strategies/{strategy_id}/backtest")
@@ -309,14 +369,20 @@ async def place_order(req: OrderReq, token: Optional[str] = None) -> dict:
                                 detail=f"No live bars yet for {strategy['symbol']}")
         close = series[-1]["close"]
         req.entry = close
-        req.targetPrice = close * (1 + strategy["tp_pct"] / 100)
+        req.targetPrice = close * (1 + target_levels(strategy)[0] / 100)
         req.stopLoss = close * (1 - strategy["sl_pct"] / 100)
         req.symbol = strategy["symbol"]
+
+    targets = None
+    if req.strategyId:
+        strategy = get_strategy(req.strategyId)
+        if strategy:
+            targets = [round(req.entry * (1 + pct / 100), 2) for pct in target_levels(strategy)]
 
     try:
         result = await asyncio.to_thread(
             adapter.place_bracket, req.symbol, req.side, req.qty,
-            req.entry, req.targetPrice, req.stopLoss)
+            req.entry, req.targetPrice, req.stopLoss, True, None, targets)
     except BrokerError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -357,11 +423,13 @@ def last_signals(token: Optional[str] = None) -> dict:
 @app.get("/api/signals/history")
 def signal_history(token: Optional[str] = None) -> dict:
     require_token(token)
-    rows = []
-    if os.path.exists(SIGNALS_LOG):
+    # Prefer the live in-memory hub: records there carry live AI scores.
+    # Fall back to the audit file for a cold start with no hub yet.
+    rows = list(hub.signals)
+    if not rows and os.path.exists(SIGNALS_LOG):
         with open(SIGNALS_LOG, "r", encoding="utf-8") as f:
             rows = [json.loads(line) for line in f if line.strip()]
-    return {"signals": rows}
+    return {"signals": rows[-100:]}
 
 
 @app.get("/api/orders/history")

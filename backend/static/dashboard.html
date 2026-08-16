@@ -59,6 +59,8 @@
   .badge.win { background: rgba(63,185,80,.15); color: var(--green); }
   .badge.loss { background: rgba(248,81,73,.15); color: var(--red); }
   .badge.signal { background: rgba(31,111,235,.2); color: #79c0ff; }
+  .muted-note { color: var(--muted); font-size: 11px; font-weight: 400; }
+  .tp-lv { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(63,185,80,.12); color: var(--green); font-size: 11px; }
   #equityChart { width: 100%; height: 240px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
   .msg { margin-top: 8px; font-size: 12px; min-height: 16px; }
   .msg.ok { color: var(--green); } .msg.err { color: var(--red); }
@@ -108,6 +110,11 @@
     <div class="panel">
       <h3>Latest signals</h3>
       <table id="signalTable"></table>
+    </div>
+    <div style="height:16px"></div>
+    <div class="panel">
+      <h3>Strategy leaderboard <span class="muted-note">— backtest vs paper feed, 30 days, refreshed hourly. Stats are per-trade, fractional-fill inclusive, and include every losing exit. No cherry-picking.</span></h3>
+      <table id="leaderboardTable"></table>
     </div>
   </section>
 
@@ -259,17 +266,18 @@ function renderStats(a) {
   $("recentCloses").innerHTML = a.recentCloses.length
     ? `<tr><th>Symbol</th><th>Exit</th><th>Entry</th><th>PnL</th><th>When</th></tr>` + a.recentCloses.map((p) => `
       <tr class="flash"><td>${esc(p.symbol)}</td>
-      <td><span class="badge ${p.exit === "TP" ? "win" : "loss"}">${esc(p.exit)}</span></td>
+      <td><span class="badge ${p.exit === "SL" ? "loss" : "win"}">${esc(p.exit)}</span></td>
       <td>${fmt(p.entry)}</td><td>${pnl(p.pnl_pct)}</td><td>${time(p.opened_at)}</td></tr>`).join("")
     : `<tr><td colspan="5" class="empty">No closed trades yet</td></tr>`;
 }
 
 function renderSignals(signals) {
   $("signalTable").innerHTML = signals.length
-    ? `<tr><th>Symbol</th><th>Strategy</th><th>Entry</th><th>Target</th><th>Stop</th><th>When</th></tr>` +
+    ? `<tr><th>Symbol</th><th>Strategy</th><th>Entry</th><th>Targets</th><th>Stop</th><th>When</th></tr>` +
       signals.map((s) => `<tr>
         <td>${esc(s.symbol)} <span class="badge signal">${esc(s.side)}</span></td>
-        <td>${esc(s.strategyName)}</td><td>${fmt(s.entry)}</td><td>${fmt(s.targetPrice)}</td>
+        <td>${esc(s.strategyName)}</td><td>${fmt(s.entry)}</td>
+        <td>${(s.targets || [s.targetPrice]).map((t, i) => `<span class="tp-lv">TP${i + 1} ${fmt(t)}</span>`).join(" ")}</td>
         <td>${fmt(s.stopLoss)}</td><td>${time(s.ts)}</td></tr>`).join("")
     : `<tr><td colspan="6" class="empty">Waiting for live signals…</td></tr>`;
 }
@@ -281,7 +289,8 @@ function renderStrategies() {
       <div><span class="name">${esc(s.name)}</span> <span class="sym">${esc(s.symbol)}</span></div>
       <div class="desc">${esc(s.description)}</div>
       <div class="stat-row"><span class="k">Interval</span><span>${s.interval}</span></div>
-      <div class="stat-row"><span class="k">TP / SL</span><span>+${s.tp_pct}% / −${s.sl_pct}%</span></div>
+      <div class="stat-row"><span class="k">TP levels</span><span>${(s.tp_levels || [s.tp_pct]).map((p) => `+${p}%`).join(" → ")}</span></div>
+      <div class="stat-row"><span class="k">SL</span><span>−${s.sl_pct}%</span></div>
       <div class="stat-row"><span class="k">Backtest (paper)</span><span id="bt-${s.id}">—</span></div>
       <div class="bt-row">
         <select id="btBroker-${s.id}">
@@ -303,7 +312,7 @@ function renderStrategies() {
           method: "POST",
           body: JSON.stringify({ broker: brokerSel.value, interval: "5m", days: 30 }),
         });
-        el.textContent = `${r.trades} trades · ${fmt(r.winRate, 1)}% win · ${fmt(r.netReturnPct)}% net · DD ${fmt(r.maxDrawdownPct)}%`;
+        el.textContent = `${r.trades} trades · ${fmt(r.winRate, 1)}% win · ${fmt(r.netReturnPct)}% net · DD ${fmt(r.maxDrawdownPct)}% · Sharpe ${fmt(r.sharpe, 2)} · PF ${fmt(r.profitFactor, 2)}`;
       } catch (e) { el.textContent = "backtest failed: " + e.message; }
       b.disabled = false; b.textContent = "Run backtest";
     };
@@ -326,7 +335,7 @@ function renderPositions() {
     ? `<tr><th>Symbol</th><th>Exit</th><th>Entry</th><th>Exit price</th><th>PnL</th><th>When</th></tr>` +
       closed.slice().reverse().map((p) => `<tr>
         <td>${esc(p.symbol)}</td>
-        <td><span class="badge ${p.exit === "TP" ? "win" : "loss"}">${esc(p.exit)}</span></td>
+        <td><span class="badge ${p.exit === "SL" ? "loss" : "win"}">${esc(p.exit)}</span></td>
         <td>${fmt(p.entry)}</td><td>${fmt(p.exit_price)}</td><td>${pnl(p.pnl_pct)}</td><td>${time(p.opened_at)}</td></tr>`).join("")
     : `<tr><td colspan="6" class="empty">No closed trades yet</td></tr>`;
 }
@@ -381,6 +390,18 @@ function connectWS() {
 async function refreshAnalytics() {
   try { latest.analytics = await api("/api/analytics"); renderStats(latest.analytics); } catch (_) {}
 }
+async function refreshLeaderboard() {
+  try { renderLeaderboard((await api("/api/strategies/leaderboard")).rows || []); } catch (_) {}
+}
+function renderLeaderboard(rows) {
+  $("leaderboardTable").innerHTML = rows.length
+    ? `<tr><th>#</th><th>Strategy</th><th>Symbol</th><th>Win rate</th><th>Net %</th><th>DD %</th><th>Sharpe</th><th>PF</th><th>Trades</th></tr>` +
+      rows.map((r, i) => `<tr>
+        <td>${i + 1}</td><td>${esc(r.name)}</td><td>${esc(r.symbol)}</td>
+        <td>${fmt(r.winRate, 1)}%</td><td class="${pnlClass(r.netReturnPct)}">${r.netReturnPct >= 0 ? "+" : ""}${fmt(r.netReturnPct)}</td>
+        <td>${fmt(r.maxDrawdownPct)}</td><td>${fmt(r.sharpe, 2)}</td><td>${fmt(r.profitFactor, 2)}</td><td>${r.trades}</td></tr>`).join("")
+    : `<tr><td colspan="9" class="empty">No backtest data yet — refresh or run a backtest</td></tr>`;
+}
 async function refreshSignals() {
   try { latest.signals = (await api("/api/signals/history")).signals.slice(-50); renderSignals(latest.signals); } catch (_) {}
 }
@@ -404,7 +425,7 @@ async function refreshStrategies() {
   try { latest.strategies = (await api("/api/strategies")).strategies; renderStrategies(); } catch (_) {}
 }
 function refreshAll() {
-  refreshAnalytics(); refreshSignals(); refreshPositions(); refreshOrders(); refreshBrokers(); refreshStrategies();
+  refreshAnalytics(); refreshSignals(); refreshPositions(); refreshOrders(); refreshBrokers(); refreshStrategies(); refreshLeaderboard();
 }
 
 // ---------------------------------------------------------- broker ui --

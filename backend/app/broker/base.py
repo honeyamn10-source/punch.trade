@@ -30,9 +30,12 @@ class BrokerAdapter(ABC):
     @abstractmethod
     def place_bracket(self, symbol: str, side: str, qty: int,
                       entry: float, target: float, stop: float,
-                      market: bool = True, price: Optional[float] = None) -> Dict:
+                      market: bool = True, price: Optional[float] = None,
+                      targets: Optional[List[float]] = None) -> Dict:
         """Place entry + attached take-profit + stop-loss as one unit
-        (Kite BO / Binance OCO-style legs). Returns {orderId, status, legs}."""
+        (Kite BO / Binance OCO-style legs). Returns {orderId, status, legs}.
+        `targets` is the multi-level TP list; adapters without multi-level
+        support use `target` (the primary level)."""
 
     @abstractmethod
     def get_positions(self) -> List[Dict]:

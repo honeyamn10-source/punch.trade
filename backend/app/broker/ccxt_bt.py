@@ -70,7 +70,8 @@ class CCXTBroker(BrokerAdapter):
 
     def place_bracket(self, symbol: str, side: str, qty: int,
                       entry: float, target: float, stop: float,
-                      market: bool = True, price: Optional[float] = None) -> Dict:
+                      market: bool = True, price: Optional[float] = None,
+                      targets: Optional[List[float]] = None) -> Dict:
         side_s = "buy" if side.lower() == "buy" else "sell"
         exit_side = "sell" if side_s == "buy" else "buy"
         try:

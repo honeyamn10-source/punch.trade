@@ -10,7 +10,7 @@ from app.engine import StrategyRunner
 def _bars(prices):
     out = []
     for i, c in enumerate(prices):
-        out.append({"ts": i, "open": c, "high": c * 1.01, "low": c * 0.99,
+        out.append({"ts": i, "open": c, "high": c * 1.002, "low": c * 0.998,
                     "close": c, "volume": 1000})
     return out
 
@@ -40,12 +40,44 @@ def test_crosses():
     assert indicators.crossed_above(up, 3, 10)
 
 
+# ------------------------------------------------- composite indicators
+def test_macd_histogram_zero_cross():
+    rising = [100 + i * 0.5 for i in range(60)]
+    out = indicators.macd(rising)
+    assert out[0] == 0.0  # EMA seeds from the first bar
+    assert any(v is not None for v in out)
+    # strong rally -> histogram positive at the end
+    assert out[-1] > 0
+    falling = [200 - i * 0.5 for i in range(60)]
+    out2 = indicators.macd(falling)
+    assert out2[-1] < 0
+
+
+def test_bollinger_bands_order():
+    values = [100 + (i % 5) * 2 for i in range(40)]
+    b = indicators.bollinger(values, 20)
+    assert b["mid"][30] is not None
+    assert b["lower"][30] < b["mid"][30] < b["upper"][30]
+
+
+def test_donchian_and_vwap():
+    values = [100 + i for i in range(30)]
+    d = indicators.donchian(values, 10)
+    assert d["high"][29] == max(values[20:30])
+    assert d["low"][29] == min(values[20:30])
+    bars = [{"open": v, "high": v + 1, "low": v - 1, "close": v, "volume": 10}
+            for v in values]
+    w = indicators.vwap(bars, 10)
+    assert w[29] is not None
+    assert w[29] == sum((b["high"] + b["low"] + b["close"]) / 3 * 10 for b in bars[20:30]) / (10 * 10)
+
+
 # ---------------------------------------------------------------- engine
 RSI_STRAT = {
     "id": "t", "name": "Test", "symbol": "X", "interval": "5m",
     "entry": {"indicator": "RSI", "period": 14, "condition": "crosses_below", "value": 30},
     "exit": {"indicator": "RSI", "period": 14, "condition": "crosses_above", "value": 55},
-    "tp_pct": 2.0, "sl_pct": 1.0,
+    "tp_pct": 2.0, "sl_pct": 30.0,  # wide SL: signal fires mid-dip, dip must finish before fills
 }
 
 
@@ -88,9 +120,114 @@ def test_backtest_reuses_engine():
     assert result["trades"] == 2
     assert 0 <= result["winRate"] <= 100
     assert result["maxDrawdownPct"] >= 0
-    assert result["exitSplit"]["TP"] + result["exitSplit"]["SL"] == result["trades"]
+    assert result["exitSplit"].get("TP1", 0) + result["exitSplit"].get("SL", 0) == result["trades"]
+
+
+def test_backtest_metrics_present():
+    strategy = dict(RSI_STRAT)
+    result = backtest(strategy, _bars(_rsi_cross_series() + _rsi_cross_series()))
+    assert "sharpe" in result and "profitFactor" in result
+    assert "avgWinPct" in result and "avgLossPct" in result
+    assert result["profitFactor"] >= 0
+    assert result["sharpe"] >= -100  # sane bound
+
+
+MULTI_TP_STRAT = {
+    "id": "mtp", "name": "MultiTP", "symbol": "X", "interval": "5m",
+    "entry": {"indicator": "SMA", "period": 5, "condition": "crosses_above", "value": "self"},
+    "exit": {"indicator": "SMA", "period": 5, "condition": "crosses_below", "value": "self"},
+    "tp_levels": [1.0, 3.0], "sl_pct": 2.0,
+}
+
+
+def test_backtest_multi_tp_partial_fills():
+    """A steady rally after entry should hit TP1 then TP2 - two exits per trade."""
+    prices = [100] * 25
+    for i in range(40):
+        prices.append(100 + (i + 1) * 0.75)  # +30% drift, never retraces to SL
+    bars = _bars(prices)
+    result = backtest(MULTI_TP_STRAT, bars)
+    assert result["trades"] == 2
+    assert result["exitSplit"].get("TP1") == 1
+    assert result["exitSplit"].get("TP2") == 1
+
+
+def test_backtest_sl_closes_remaining_after_tp1():
+    """TP1 hits (half closed), then SL takes the rest - two exits, one loss."""
+    prices = [100] * 40
+    for i in range(2):
+        prices.append(100 + (i + 1) * 1.1)  # rally to ~+2.2% > TP1 (+1%), below TP2 (+3%)
+    last = prices[-1]
+    for i in range(20):
+        prices.append(last - (i + 1) * 2.0)  # steady decline through SL (no gap)
+    bars = _bars(prices)
+    result = backtest(MULTI_TP_STRAT, bars)
+    assert result["exitSplit"].get("TP1") == 1
+    assert result["exitSplit"].get("SL") == 1
+    assert result["trades"] == 2
 
 
 def test_backtest_insufficient_data():
     result = backtest(RSI_STRAT, _bars([100] * 10))
     assert "error" in result
+
+
+# ------------------------------------------------- two-series conditions
+GOLDEN_CROSS = {
+    "id": "gc", "name": "GoldenCross", "symbol": "X", "interval": "5m",
+    "entry": {"indicator": "SMA", "period": 20, "condition": "crosses_above",
+              "value": {"indicator": "SMA", "period": 50}},
+    "exit": {"indicator": "SMA", "period": 20, "condition": "crosses_below",
+             "value": {"indicator": "SMA", "period": 50}},
+    "tp_pct": 2.0, "sl_pct": 1.0,
+}
+
+
+def test_golden_cross_two_series_condition():
+    """SMA20 must cross above SMA50: flat then a strong rally."""
+    prices = [100] * 70
+    for i in range(30):
+        prices.append(100 + (i + 1) * 2.0)
+    runner = StrategyRunner(GOLDEN_CROSS)
+    bars = _bars(prices)
+    fired = [runner.on_bar(bars[: i + 1]) for i in range(1, len(bars))]
+    signals = [s for s in fired if s is not None]
+    assert len(signals) == 1
+    assert signals[0].side == "buy"
+
+
+# ------------------------------------------------------------ paper broker
+def test_paper_broker_multi_tp_partial_closes():
+    from app.broker.paper import PaperBroker
+
+    broker = PaperBroker()
+    broker.place_bracket("X", "buy", 100, 100.0, 102.0, 99.0, targets=[101.0, 103.0])
+    p = broker._positions[0]
+    assert p["targets"] == [101.0, 103.0]
+    assert p["remaining_qty"] == 100
+
+    closed = broker.on_bar("X", {"high": 101.5, "low": 99.5, "close": 101.0})
+    assert len(closed) == 1
+    assert closed[0]["exit"] == "TP1"
+    assert closed[0]["status"] == "open"  # partial — still open
+    p = broker._positions[0]
+    assert p["remaining_qty"] == 50
+    assert p["targets"] == [103.0]
+
+    closed = broker.on_bar("X", {"high": 104.0, "low": 102.5, "close": 103.5})
+    assert len(closed) == 1
+    assert closed[0]["exit"] == "TP2"
+    assert closed[0]["status"] == "closed"
+    assert broker._positions[0]["status"] == "closed"
+
+
+def test_paper_broker_sl_closes_remaining():
+    from app.broker.paper import PaperBroker
+
+    broker = PaperBroker()
+    broker.place_bracket("X", "buy", 100, 100.0, 102.0, 99.0, targets=[101.0, 103.0])
+    broker.on_bar("X", {"high": 101.5, "low": 99.5, "close": 101.0})  # TP1, half remains
+    closed = broker.on_bar("X", {"high": 100.0, "low": 98.5, "close": 99.0})  # SL takes rest
+    assert len(closed) == 1
+    assert closed[0]["exit"] == "SL"
+    assert closed[0]["status"] == "closed"

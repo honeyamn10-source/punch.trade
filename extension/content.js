@@ -168,7 +168,7 @@
           <span style="float:right;color:#8b949e;font-size:10px">${when}</span></div>
           <div class="pt-rows">
             <div><div class="k">ENTRY</div><div class="v">${s.entry}</div></div>
-            <div><div class="k">TARGET</div><div class="v">${s.targetPrice}</div></div>
+            <div><div class="k">TARGETS</div><div class="v">${(s.targets || [s.targetPrice]).map((t) => t).join(" / ")}</div></div>
             <div><div class="k">STOP</div><div class="v">${s.stopLoss}</div></div>
           </div>
           <button class="pt-punch">PUNCH — ${s.side.toUpperCase()} @ ${s.entry}</button>`;

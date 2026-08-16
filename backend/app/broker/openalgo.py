@@ -69,7 +69,8 @@ class OpenAlgoAdapter(BrokerAdapter):
 
     def place_bracket(self, symbol: str, side: str, qty: int,
                       entry: float, target: float, stop: float,
-                      market: bool = True, price: Optional[float] = None) -> Dict:
+                      market: bool = True, price: Optional[float] = None,
+                      targets: Optional[List[float]] = None) -> Dict:
         """Entry order via OpenAlgo; TP/SL legs attempted as GTT pairs
         (brokers that support GTT), otherwise only the entry is placed —
         the extension still shows the levels for manual exits."""

@@ -69,14 +69,18 @@ class PaperBroker(BrokerAdapter):
 
     def place_bracket(self, symbol: str, side: str, qty: int,
                       entry: float, target: float, stop: float,
-                      market: bool = True, price: Optional[float] = None) -> Dict:
+                      market: bool = True, price: Optional[float] = None,
+                      targets: Optional[List[float]] = None) -> Dict:
         slip = entry * (1 + (self._rng.uniform(-1, 1) * config.SLIPPAGE_PCT / 100))
         fill_price = slip if market else (price or entry)
         pos_id = uuid.uuid4().hex[:12]
+        tps = targets or [target]
         position = {"id": pos_id, "symbol": symbol, "side": side, "qty": qty,
-                    "entry": round(fill_price, 2), "target": round(target, 2),
-                    "stop": round(stop, 2), "status": "open",
-                    "opened_at": time.time(), "pnl_pct": 0.0, "exit": None}
+                    "entry": round(fill_price, 2), "target": round(tps[0], 2),
+                    "targets": [round(t, 2) for t in tps], "stop": round(stop, 2),
+                    "status": "open", "opened_at": time.time(), "pnl_pct": 0.0,
+                    "exit": None, "remaining_qty": qty, "tp_count": len(tps),
+                    "tp_filled": 0}
         self._positions.append(position)
         self._fills.append({"id": uuid.uuid4().hex[:12], "positionId": pos_id,
                             "symbol": symbol, "side": "buy", "qty": qty,
@@ -86,30 +90,42 @@ class PaperBroker(BrokerAdapter):
                             "ts": time.time()})
         return {"orderId": pos_id, "status": "FILLED", "legs": [
             {"leg": "ENTRY", "status": "FILLED", "price": round(fill_price, 2)},
-            {"leg": "TAKE_PROFIT", "status": "PENDING", "price": round(target, 2)},
+            {"leg": "TAKE_PROFIT", "status": "PENDING", "price": tps},
             {"leg": "STOP_LOSS", "status": "PENDING", "price": round(stop, 2)}]}
 
     def on_bar(self, symbol: str, bar: dict) -> List[dict]:
-        """Feed a new live bar; close any positions that hit TP/SL."""
+        """Feed a new live bar; close position fractions at TP/SL levels."""
         closed = []
         for p in self._positions:
             if p["symbol"] != symbol or p["status"] != "open":
                 continue
             if bar["low"] <= p["stop"]:
-                p["status"] = "closed"
-                p["exit"] = "SL"
-                p["exit_price"] = p["stop"]
-                p["pnl_pct"] = round((p["stop"] - p["entry"]) / p["entry"] * 100, 2)
-            elif bar["high"] >= p["target"]:
-                p["status"] = "closed"
-                p["exit"] = "TP"
-                p["exit_price"] = p["target"]
-                p["pnl_pct"] = round((p["target"] - p["entry"]) / p["entry"] * 100, 2)
+                self._exit_fraction(p, p["stop"], "SL", p["remaining_qty"], closed)
+            elif bar["high"] >= p["target"] and p["targets"]:
+                p["tp_filled"] += 1
+                frac_qty = max(1, round(p["qty"] / p["tp_count"]))
+                self._exit_fraction(p, p["targets"][0], f"TP{p['tp_filled']}", frac_qty, closed)
+                p["targets"] = p["targets"][1:]
+                p["target"] = p["targets"][0] if p["targets"] else p["target"]
             else:
                 p["pnl_pct"] = round((bar["close"] - p["entry"]) / p["entry"] * 100, 2)
                 continue
-            closed.append(dict(p))
         return closed
+
+    def _exit_fraction(self, p: dict, price: float, label: str, qty: float, closed: List[dict]) -> None:
+        p["remaining_qty"] -= qty
+        realized = (price - p["entry"]) / p["entry"] * 100
+        event = {"id": p["id"], "symbol": p["symbol"], "side": p["side"],
+                 "qty": qty, "entry": p["entry"], "exit_price": round(price, 2),
+                 "exit": label, "pnl_pct": round(realized, 2),
+                 "opened_at": p["opened_at"], "status": "open"}
+        if p["remaining_qty"] <= 0:
+            p["status"] = "closed"
+            p["exit"] = label
+            p["exit_price"] = round(price, 2)
+            p["pnl_pct"] = round(realized, 2)
+            event["status"] = "closed"
+        closed.append(event)
 
     def get_positions(self) -> List[Dict]:
         return [dict(p) for p in self._positions]
