@@ -470,6 +470,21 @@ def analytics(token: Optional[str] = None) -> dict:
     }
 
 
+@app.get("/api/candles")
+def candles(symbol: str, token: Optional[str] = None, limit: int = 120) -> dict:
+    """Live candle series for the chart panel (falls back to paper history)."""
+    require_token(token)
+    bars: List[dict] = []
+    if feed is not None:
+        bars = feed.bars.get(symbol, [])
+    if not bars:
+        try:
+            bars = brokers.adapters["paper"].get_historical_bars(symbol, "5m", 1)
+        except Exception:
+            bars = []
+    return {"symbol": symbol, "bars": bars[-limit:]}
+
+
 # ------------------------------------------------------------- WS -------
 @app.websocket("/ws/signals")
 async def ws_signals(ws: WebSocket) -> None:

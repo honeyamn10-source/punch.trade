@@ -72,6 +72,47 @@ def test_donchian_and_vwap():
     assert w[29] == sum((b["high"] + b["low"] + b["close"]) / 3 * 10 for b in bars[20:30]) / (10 * 10)
 
 
+# -------------------------------------------- professional indicators ----
+def _ohlc(prices):
+    return [{"open": c, "high": c * 1.01, "low": c * 0.99, "close": c, "volume": 100}
+            for c in prices]
+
+
+def test_atr_positive_and_small_on_flat():
+    flat = _ohlc([100.0] * 20)
+    a = indicators.atr(flat, 14)
+    assert a[0] is None
+    assert a[-1] > 0
+    spiky = [100] + [100 + (3 if i % 2 else -3) for i in range(19)]
+    a2 = indicators.atr(_ohlc(spiky), 14)
+    assert a2[-1] > a[-1]  # spiky series has higher ATR
+
+
+def test_stochastic_bounds_and_extremes():
+    rising = _ohlc([100 + i for i in range(30)])
+    s = indicators.stochastic(rising, 14, 3)
+    assert s[0] is None
+    vals = [v for v in s if v is not None]
+    assert all(0 <= v <= 100 for v in vals)
+    falling = _ohlc([100 - i for i in range(30)])
+    s2 = indicators.stochastic(falling, 14, 3)
+    vals2 = [v for v in s2 if v is not None]
+    assert vals2[-1] < 20  # deep downtrend -> oversold
+
+
+def test_adx_range():
+    bars = _ohlc([100 + (i % 6) * 1.5 for i in range(60)])  # trend-ish
+    d = indicators.adx(bars, 14)
+    vals = [v for v in d if v is not None]
+    assert len(vals) > 0
+    assert all(0 <= v <= 100 for v in vals)
+    # strong rally -> directional, high ADX
+    trend = _ohlc([100 + i * 1.0 for i in range(60)])
+    d2 = indicators.adx(trend, 14)
+    vals2 = [v for v in d2 if v is not None]
+    assert vals2[-1] > 20
+
+
 # ---------------------------------------------------------------- engine
 RSI_STRAT = {
     "id": "t", "name": "Test", "symbol": "X", "interval": "5m",

@@ -110,6 +110,28 @@ STRATEGIES: List[Dict] = [
         "tp_levels": [2.0, 4.0],
         "sl_pct": 1.5,
     },
+    {
+        "id": "stoch-reversal",
+        "name": "Stochastic Reversal",
+        "symbol": "INFY",
+        "interval": "5m",
+        "description": "Oversold snap-back: buy when Stochastic(14,3) crosses below 20, exit when it crosses above 80.",
+        "entry": {"indicator": "STOCH_K", "period": 14, "condition": "crosses_below", "value": 20},
+        "exit": {"indicator": "STOCH_K", "period": 14, "condition": "crosses_above", "value": 80},
+        "tp_levels": [1.2, 2.4],
+        "sl_pct": 1.0,
+    },
+    {
+        "id": "adx-trend",
+        "name": "ADX Trend Rider",
+        "symbol": "RELIANCE",
+        "interval": "5m",
+        "description": "Trade only strong trends: enter when ADX(14) crosses above 25, exit when it decays below 20.",
+        "entry": {"indicator": "ADX", "period": 14, "condition": "crosses_above", "value": 25},
+        "exit": {"indicator": "ADX", "period": 14, "condition": "crosses_below", "value": 20},
+        "tp_levels": [2.0, 4.0],
+        "sl_pct": 1.2,
+    },
 ]
 
 
@@ -157,6 +179,12 @@ def compute_indicator(indicator: str, period: int, bars: List[dict]) -> List[Opt
         return indicators.donchian(values, period)["low"]
     if indicator == "VWAP":
         return indicators.vwap(bars, period)
+    if indicator == "ATR":
+        return indicators.atr(bars, period)
+    if indicator == "STOCH_K":
+        return indicators.stochastic(bars, period)
+    if indicator == "ADX":
+        return indicators.adx(bars, period)
     raise ValueError(f"Unknown indicator: {indicator}")
 
 

@@ -35,6 +35,10 @@
   .pos { color: var(--green); } .neg { color: var(--red); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .chart-tabs { display: flex; gap: 6px; margin: 8px 0 12px; flex-wrap: wrap; }
+  .chart-tabs button { background: #161b22; border: 1px solid #30363d; color: var(--muted); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .chart-tabs button.active { background: rgba(31,111,235,.2); border-color: #1f6feb; color: #79c0ff; }
+  #candleChart { height: 340px; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
   .panel h3 { font-size: 13px; margin-bottom: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -73,6 +77,7 @@
   .form-grid label { grid-column: 1 / -1; font-size: 11px; color: var(--muted); margin-bottom: -6px; }
   footer { padding: 20px 24px; color: var(--muted); font-size: 11px; text-align: center; }
 </style>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <header>
@@ -105,6 +110,12 @@
         <h3>Recent closed trades</h3>
         <table id="recentCloses"></table>
       </div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="panel">
+      <h3>Market <span id="chartSymLabel" class="muted-note"></span></h3>
+      <div class="chart-tabs" id="chartTabs"></div>
+      <div id="candleChart"></div>
     </div>
     <div style="height:16px"></div>
     <div class="panel">
@@ -254,6 +265,56 @@ function drawEquity(curve) {
   ctx.fillText((last >= 0 ? "+" : "") + last.toFixed(2) + "%", w - 80, y(last) - 6);
 }
 
+// ------------------------------------------------------------ candles --
+let candleChart = null, candleSeries = null, currentSym = null;
+const chartMarkers = [];
+
+function initChart() {
+  if (!window.LightweightCharts || candleChart) return;
+  candleChart = LightweightCharts.createChart($("candleChart"), {
+    layout: { background: { color: "#0d1117" }, textColor: "#8b949e" },
+    grid: { vertLines: { color: "#161b22" }, horzLines: { color: "#161b22" } },
+    timeScale: { timeVisible: true, secondsVisible: false },
+    rightPriceScale: { borderColor: "#30363d" },
+  });
+  candleSeries = candleChart.addCandlestickSeries({
+    upColor: "#3fb950", downColor: "#f85149",
+    borderUpColor: "#3fb950", borderDownColor: "#f85149",
+    wickUpColor: "#3fb950", wickDownColor: "#f85149",
+  });
+  try {
+    new ResizeObserver(() => candleChart.applyOptions({ width: $("candleChart").clientWidth })).observe($("candleChart"));
+  } catch (_) {}
+  candleChart.applyOptions({ width: $("candleChart").clientWidth });
+}
+
+function setChartSymbol(sym) {
+  if (!candleChart) initChart();
+  currentSym = sym;
+  $("chartSymLabel").textContent = sym;
+  document.querySelectorAll("#chartTabs button").forEach((b) => b.classList.toggle("active", b.dataset.sym === sym));
+  loadCandles(sym);
+}
+
+async function loadCandles(sym) {
+  if (!candleChart) return;
+  try {
+    const res = await fetch(SERVER + "/api/candles?symbol=" + encodeURIComponent(sym) +
+      "&limit=120&token=" + encodeURIComponent(token));
+    const r = await res.json();
+    const data = (r.bars || []).map((b) => ({ time: Math.floor(b.ts), open: b.open, high: b.high, low: b.low, close: b.close }));
+    candleSeries.setData(data);
+    const marks = chartMarkers.filter((m) => m.symbol === sym).map((m) => ({
+      time: Math.floor(m.ts), position: "belowBar", color: "#3fb950",
+      shape: "arrowUp", text: m.strategyName,
+    }));
+    candleSeries.setMarkers(marks);
+    candleChart.timeScale().fitContent();
+  } catch (_) {}
+}
+
+function refreshCandles() { if (currentSym && candleChart) loadCandles(currentSym); }
+
 // ------------------------------------------------------------ overview --
 function renderStats(a) {
   if (!a) return;
@@ -378,6 +439,8 @@ function connectWS() {
       latest.signals.unshift(msg.data);
       latest.signals = latest.signals.slice(0, 50);
       renderSignals(latest.signals);
+      chartMarkers.push(msg.data);
+      if (currentSym === msg.data.symbol) refreshCandles();
       refreshAnalytics();
     } else if (msg.type === "position") {
       refreshAnalytics();
@@ -422,7 +485,15 @@ async function refreshBrokers() {
   try { renderBrokers(await api("/api/broker/status")); } catch (_) {}
 }
 async function refreshStrategies() {
-  try { latest.strategies = (await api("/api/strategies")).strategies; renderStrategies(); } catch (_) {}
+  try {
+    latest.strategies = (await api("/api/strategies")).strategies;
+    renderStrategies();
+    const syms = [...new Set(latest.strategies.map((s) => s.symbol))];
+    $("chartTabs").innerHTML = syms.map((s) =>
+      `<button data-sym="${esc(s)}" class="${s === currentSym ? "active" : ""}">${esc(s)}</button>`).join("");
+    document.querySelectorAll("#chartTabs button").forEach((b) => b.onclick = () => setChartSymbol(b.dataset.sym));
+    if (!currentSym && syms.length) setChartSymbol(syms[0]);
+  } catch (_) {}
 }
 function refreshAll() {
   refreshAnalytics(); refreshSignals(); refreshPositions(); refreshOrders(); refreshBrokers(); refreshStrategies(); refreshLeaderboard();
@@ -469,6 +540,7 @@ setInterval(refreshAnalytics, 10000);
 setInterval(refreshPositions, 15000);
 setInterval(refreshOrders, 20000);
 setInterval(refreshBrokers, 30000);
+setInterval(refreshCandles, 4000);
 </script>
 </body>
 </html>

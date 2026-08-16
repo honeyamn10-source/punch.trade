@@ -150,3 +150,88 @@ def vwap(bars: List[dict], period: int = 20) -> List[Optional[float]]:
         if i >= period - 1:
             out[i] = cum_pv / cum_v
     return out
+
+
+def _wilder_smooth(values: List[float], period: int) -> List[float]:
+    out: List[float] = []
+    if not values:
+        return out
+    prev = values[0]
+    out.append(prev)
+    for v in values[1:]:
+        prev = (prev * (period - 1) + v) / period
+        out.append(prev)
+    return out
+
+
+def atr(bars: List[dict], period: int = 14) -> List[Optional[float]]:
+    """Average True Range (Wilder). Classic volatility measure."""
+    n = len(bars)
+    out: List[Optional[float]] = [None] * n
+    if n < period + 1:
+        return out
+    trs: List[float] = []
+    for i in range(1, n):
+        h, l, c_prev = bars[i]["high"], bars[i]["low"], bars[i - 1]["close"]
+        trs.append(max(h - l, abs(h - c_prev), abs(l - c_prev)))
+    smoothed = _wilder_smooth(trs, period)
+    for j, s in enumerate(smoothed):
+        out[j + 1] = s
+    return out
+
+
+def stochastic(bars: List[dict], period: int = 14, smooth_k: int = 3) -> List[Optional[float]]:
+    """Stochastic %K (fast, smoothed). Values 0-100; <20 oversold, >80 overbought."""
+    n = len(bars)
+    out: List[Optional[float]] = [None] * n
+    if n < period + smooth_k:
+        return out
+    raw: List[float] = []
+    for i in range(period - 1, n):
+        window = bars[i - period + 1: i + 1]
+        hi = max(b["high"] for b in window)
+        lo = min(b["low"] for b in window)
+        raw.append((bars[i]["close"] - lo) / (hi - lo) * 100 if hi > lo else 50.0)
+    for j in range(len(raw) - smooth_k + 1):
+        out[period - 1 + j + smooth_k - 1] = sum(raw[j: j + smooth_k]) / smooth_k
+    return out
+
+
+def adx(bars: List[dict], period: int = 14) -> List[Optional[float]]:
+    """Average Directional Index (Wilder). >25 = trend, <20 = range."""
+    n = len(bars)
+    out: List[Optional[float]] = [None] * n
+    if n < period * 2:
+        return out
+    plus_dm: List[float] = []
+    minus_dm: List[float] = []
+    trs: List[float] = []
+    for i in range(1, n):
+        h, l, pc, ph, pl = (bars[i]["high"], bars[i]["low"],
+                            bars[i - 1]["close"], bars[i - 1]["high"], bars[i - 1]["low"])
+        up = h - ph
+        down = pl - l
+        plus_dm.append(up if up > down and up > 0 else 0.0)
+        minus_dm.append(down if down > up and down > 0 else 0.0)
+        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+    atr_s = _wilder_smooth(trs, period)
+    pdi_s = _wilder_smooth(plus_dm, period)
+    mdi_s = _wilder_smooth(minus_dm, period)
+    for i in range(period, n):
+        atr_v = atr_s[i - 1]
+        if atr_v <= 0:
+            continue
+        pdi = pdi_s[i - 1] / atr_v * 100
+        mdi = mdi_s[i - 1] / atr_v * 100
+        dx = abs(pdi - mdi) / (pdi + mdi) * 100 if (pdi + mdi) > 0 else 0.0
+        out[i] = dx
+    # smooth DX into ADX (Wilder rolling)
+    adx_vals = [v for v in out if v is not None]
+    if len(adx_vals) >= period:
+        smoothed = _wilder_smooth(adx_vals, period)
+        idx = 0
+        for i in range(n):
+            if out[i] is not None:
+                out[i] = smoothed[idx]
+                idx += 1
+    return out
