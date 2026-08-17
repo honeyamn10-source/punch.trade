@@ -64,3 +64,22 @@ def delete(broker: str) -> None:
 
 def brokers() -> list:
     return list(_read_raw().keys())
+
+
+def rotate_key() -> dict:
+    """Re-encrypt the entire vault under a fresh key (key rotation).
+
+    Order matters: the new vault is written first, then the in-memory
+    Fernet is swapped, then the key file. A crash mid-sequence leaves the
+    old key able to decrypt the old vault file.
+    """
+    global _fernet
+    doc = _read_raw()
+    new_key = Fernet.generate_key()
+    new_fernet = Fernet(new_key)
+    with open(VAULT_PATH, "wb") as f:
+        f.write(new_fernet.encrypt(json.dumps(doc).encode("utf-8")))
+    _fernet = new_fernet
+    with open(SECRET_PATH, "wb") as f:
+        f.write(new_key)
+    return {"brokers": list(doc.keys()), "encrypted": len(doc)}

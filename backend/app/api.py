@@ -1019,6 +1019,13 @@ def broker_status(_: None = Depends(require_token)) -> dict:
     return out
 
 
+@app.post("/api/vault/rotate-key")
+def vault_rotate_key(_: None = Depends(require_token)) -> dict:
+    """Re-encrypt the vault under a fresh key. Broker sessions stay valid;
+    only the at-rest wrapping key changes."""
+    return {"rotated": True, **vault.rotate_key()}
+
+
 @app.post("/api/orders")
 async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
     adapter = brokers.get(req.broker)

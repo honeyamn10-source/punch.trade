@@ -99,6 +99,12 @@ $("oaConnect").onclick = async () => {
   refreshStatus();
 };
 
+$("rotateKey").onclick = async () => {
+  const resp = await msg("apiPost", { path: "/api/vault/rotate-key" });
+  if (!resp || !resp.ok) return setMsg($("vaultMsg"), resp.error || "failed", false);
+  setMsg($("vaultMsg"), "Vault re-encrypted under a new key", true);
+};
+
 refreshState();
 refreshStatus();
 refreshPositions();
