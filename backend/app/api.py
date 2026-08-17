@@ -136,6 +136,15 @@ class BacktestReq(BaseModel):
     gapPolicy: str = "fill_at_next_open"
 
 
+class ResearchReq(BacktestReq):
+    trainPct: float = 0.70
+    valPct: float = 0.15
+    testPct: float = 0.15
+    walkForwardWindows: int = 4
+    bootstrapIterations: int = 200
+    seed: int = 42
+
+
 class OrderReq(BaseModel):
     broker: str = "paper"
     strategyId: Optional[str] = None
@@ -360,6 +369,51 @@ def run_backtest(strategy_id: str, req: BacktestReq, _: None = Depends(require_t
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"source": req.broker, "bars": len(bars), **backtest(strategy, bars, costs)}
+
+
+@app.post("/api/research/{strategy_id}")
+def run_research(strategy_id: str, req: ResearchReq,
+                 _: None = Depends(require_token)) -> dict:
+    """Full research dossier: chronological splits, walk-forward,
+    parameter stability, bootstrap, regime breakdown, quality gate."""
+    from .research import ResearchConfig, research_report
+    strategy = get_strategy(strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="Unknown strategy")
+    if req.broker in brokers.adapters:
+        adapter = brokers.adapters[req.broker]
+    elif req.broker == "binance":
+        adapter = CCXTBroker("", "", testnet=False)
+    else:
+        raise HTTPException(status_code=400,
+                            detail=f"Broker '{req.broker}' not connected. Connect it first.")
+    try:
+        bars = adapter.get_historical_bars(strategy["symbol"], req.interval, req.days)
+    except BrokerError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    if len(bars) < 100:
+        raise HTTPException(status_code=400,
+                            detail="Need at least 100 bars for research")
+    try:
+        cfg = ResearchConfig(
+            train_pct=req.trainPct, val_pct=req.valPct, test_pct=req.testPct,
+            walk_forward_windows=req.walkForwardWindows,
+            bootstrap_iterations=req.bootstrapIterations, seed=req.seed,
+            costs=ExecutionCostConfig(
+                starting_capital=req.startingCapital,
+                position_pct=req.positionPct,
+                commission_bps=req.commissionBps,
+                slippage_bps=req.slippageBps,
+                spread_bps=req.spreadBps,
+                intrabar_policy=req.intrabarPolicy,
+                gap_policy=req.gapPolicy))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        report = research_report(strategy, bars, cfg)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"source": req.broker, **report}
 
 
 @app.post("/api/broker/kite/login-url")

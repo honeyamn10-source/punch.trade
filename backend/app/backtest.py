@@ -97,7 +97,8 @@ def backtest(strategy: Dict, bars: List[dict],
             signal_id=signal.id, strategy_id=strategy["id"],
             strategy_version=signal.strategy_version, symbol=strategy["symbol"],
             side=signal.side, qty=qty, entry_ts=ts, entry_price=price_adj,
-            entry_commission=comm, timeframe=signal.timeframe)
+            entry_commission=comm, timeframe=signal.timeframe,
+            regime=signal.regime)
         tp_done[id(pos)] = 0
         entry_pending.clear()
         return pos

@@ -46,7 +46,7 @@ class CompletedTrade:
                  strategy_version: str, symbol: str, side: str,
                  qty: float, entry_ts: float, entry_price: float,
                  entry_commission: float = 0.0,
-                 timeframe: str = "5m"):
+                 timeframe: str = "5m", regime: str = "UNKNOWN"):
         self.signal_id = signal_id
         self.strategy_id = strategy_id
         self.strategy_version = strategy_version
@@ -57,6 +57,7 @@ class CompletedTrade:
         self.entry_price = entry_price
         self.entry_commission = entry_commission
         self.timeframe = timeframe
+        self.regime = regime
         self.fills: List[Fill] = [
             Fill(entry_ts, "ENTRY", entry_price, qty, entry_commission)]
         self.exit_ts: Optional[float] = None
@@ -125,6 +126,7 @@ class CompletedTrade:
             "side": self.side,
             "qty": self.qty,
             "timeframe": self.timeframe,
+            "regime": self.regime,
             "entryTs": self.entry_ts,
             "entryPrice": round(self.entry_price, 4),
             "exitTs": self.exit_ts,
