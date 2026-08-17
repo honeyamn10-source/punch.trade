@@ -110,6 +110,7 @@ explicit per-broker arming (never persisted).
 | [Deployment](docs/DEPLOYMENT.md) | install, env vars, going live |
 | [Testing](docs/TESTING.md) | test layout, isolation, CI |
 | [CI & Smoke](docs/CI_AND_SMOKE.md) | CI workflow + smoke script |
+| [Security history](docs/AUDIT.md) | audit findings → resolution status |
 
 ## Tech stack
 
@@ -147,7 +148,7 @@ backend/                FastAPI server (REST + WebSocket signal feed)
   tests/                pytest suite (208 tests)
   scripts/              smoke.ps1 — boot + end-to-end smoke test
 extension/              Chrome MV3 extension (overlay + popup)
-docs/                   17 documentation guides
+docs/                   18 documentation guides
 .github/workflows/ci.yml
 ```
 
