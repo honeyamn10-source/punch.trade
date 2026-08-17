@@ -311,6 +311,21 @@ def test_system_status_shape(client):
     assert st["mode"] in ("research", "paper", "live")
     assert "feeds" in st and "armed" in st
     assert "version" in st
+    assert st["version"].count(".") == 2  # semantic MAJOR.MINOR.PATCH
+    assert "gitCommit" in st
+
+
+def test_live_test_tripwire_defaults_off():
+    """CI/test mode can never accidentally reach a live broker: the
+    PUNCH_ALLOW_LIVE_TESTS tripwire must be false in the test environment,
+    and no CI workflow may ever set it (see docs/TESTING.md)."""
+    assert config.ALLOW_LIVE_TESTS is False
+
+
+def test_health_exposes_version_and_commit(client):
+    h = client.get("/api/v1/system/health").json()
+    assert h["version"].count(".") == 2
+    assert "gitCommit" in h
 
 
 def test_feed_health_reports_age(client):

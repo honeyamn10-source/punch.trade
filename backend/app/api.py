@@ -31,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config, db, execution, obs, risk, security, vault
+from .version import VERSION as APP_VERSION, git_commit
 from .backtest import ExecutionCostConfig, backtest
 from .broker.base import BrokerError
 from .broker.ccxt_bt import CCXTBroker
@@ -49,7 +50,7 @@ POSITIONS_LOG = os.path.join(DATA_DIR, "positions.json")
 closed_positions: list[dict] = []
 _placed_keys: dict[str, dict] = {}  # idempotency keys ("sig:<id>" / "req:<id>") -> record
 
-app = FastAPI(title="punch.trade", version="0.2.0")
+app = FastAPI(title="punch.trade", version=APP_VERSION)
 
 
 # -------------------------------------------------------------- security --
@@ -436,6 +437,7 @@ def v1_health(_: None = Depends(require_token)) -> dict:
     return {
         "status": "ok" if (feed_ok and db_path_ok) else "degraded",
         "version": app.version,
+        "gitCommit": git_commit(),
         "uptimeSec": round(obs.uptime(), 1),
         "db": {"ok": db_path_ok, "error": db_error},
         "feed": {
@@ -1307,6 +1309,7 @@ def system_status(_: None = Depends(require_token)) -> dict:
             "positions": os.path.exists(POSITIONS_LOG),
         },
         "version": app.version,
+        "gitCommit": git_commit(),
     }
 
 
@@ -1353,3 +1356,89 @@ def dashboard_page() -> FileResponse:
 # OpenAI-compatible -> Ollama proxy (qwen thinking fix), mounted last so
 # it never shadows the /api routes.
 app.include_router(proxy_router)
+
+
+# ------------------------------------------------------- OpenAPI -------
+# Tags are assigned post-registration (by path prefix) so /docs groups
+# endpoints sensibly without scattering tags across every decorator.
+
+_OPENAPI_TAGS = [
+    {
+        "name": "System",
+        "description": (
+            "Health, status, storage, metrics, sessions and emergency stop. "
+            "POST /api/system/arm arms a REAL broker: LIVE execution requires "
+            "armed mode + risk approval."
+        ),
+    },
+    {
+        "name": "Market Data",
+        "description": "Candles, analytics and fills.",
+    },
+    {"name": "Signals", "description": "Signal generation, state and delivery."},
+    {
+        "name": "Strategies",
+        "description": "Declarative strategy configs, lifecycle status and leaderboard.",
+    },
+    {"name": "Backtesting", "description": "Honest execution-cost backtester."},
+    {"name": "Research", "description": "Chronological research dossiers and quality gates."},
+    {
+        "name": "Risk",
+        "description": (
+            "Modes, arming, limits, circuit breaker and sizing. LIVE execution "
+            "requires armed mode and risk approval."
+        ),
+    },
+    {"name": "Orders", "description": "Order placement (idempotent per signal / clientRequestId)."},
+    {"name": "Execution", "description": "Order ledger, closed trades and broker reconciliation."},
+    {"name": "Brokers", "description": "Broker adapters: connection, credentials (vault) and status."},
+    {"name": "AI", "description": "Local Qwen analyst (offline-safe, whitelist-only prompts)."},
+    {"name": "UI", "description": "Dashboard and demo pages."},
+    {"name": "WebSocket", "description": "Real-time signal feed (/ws/signals)."},
+]
+
+_TAG_RULES = [
+    ("/api/ai/", "AI"),
+    ("/api/broker/", "Brokers"),
+    ("/api/execution/", "Execution"),
+    ("/api/risk/", "Risk"),
+    ("/api/research/", "Research"),
+    ("/api/strategies/", "Strategies"),
+    ("/api/backtest/", "Backtesting"),
+    ("/api/orders", "Orders"),
+    ("/api/positions", "Market Data"),
+    ("/api/fills", "Market Data"),
+    ("/api/analytics", "Market Data"),
+    ("/api/candles", "Market Data"),
+    ("/api/signals/", "Signals"),
+    ("/api/system/", "System"),
+    ("/api/health", "System"),
+    ("/api/v1/backtest", "Backtesting"),
+    ("/api/v1/research", "Research"),
+    ("/api/v1/orders", "Orders"),
+    ("/api/v1/ai", "AI"),
+    ("/api/v1/execution", "Execution"),
+    ("/api/v1/risk", "Risk"),
+    ("/api/v1/strategies", "Strategies"),
+    ("/api/v1/signals", "Signals"),
+    ("/api/v1/system", "System"),
+    ("/dashboard", "UI"),
+    ("/demo", "UI"),
+    ("/ws/signals", "WebSocket"),
+]
+
+
+def _apply_openapi_tags() -> None:
+    from fastapi.routing import APIRoute
+
+    app.openapi_tags = _OPENAPI_TAGS
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        for prefix, tag in _TAG_RULES:
+            if route.path.startswith(prefix):
+                route.tags = [tag]
+                break
+
+
+_apply_openapi_tags()
