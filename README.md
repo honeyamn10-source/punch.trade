@@ -35,19 +35,54 @@ Key design decisions (from the original architecture brief):
 backend/          FastAPI server (REST + WebSocket signal feed)
   app/
     engine.py     StrategyRunner — bar-driven, per-symbol dedup state
-    backtest.py   replay of engine against historical bars
+    backtest.py   honest execution-cost backtester (next-open entry, no lookahead)
+    research.py   chronological research dossiers (splits, walk-forward, bootstrap)
+    trades.py     CompletedTrade / Fill model — one position = one trade
+    pnl.py        single source of truth for PnL + metrics
+    signals.py    signal state machine (CANDIDATE..CLOSED/REJECTED/EXPIRED)
+    strategy_status.py  lifecycle ladder + composite score (never win-rate-only)
+    execution.py  order ledger + reconciliation + closed-trade booking
+    risk.py       modes, arming, limits, circuit breaker, reconciliation gate
+    security.py   sessions (hash-only), CSRF, rate limits, sanitizer, headers
+    db.py         SQLite store (WAL, migrations, legacy archive-then-import)
+    obs.py        event log, request tracing, counters
+    ai/           local Qwen analyst (auto-detect, whitelist-only, offline-safe)
     indicators.py SMA / EMA / RSI / MACD / Bollinger / Donchian / VWAP (no deps)
-    strategies.py declarative strategy configs (9 shipped: RSI, EMA, SMA,
-                 MACD, Bollinger, Donchian/turtle, VWAP, golden cross, BTC RSI)
+    strategies.py declarative strategy configs (9 shipped)
     feed.py       live feeds: paper / binance (CCXT polling) / kite (ticks)
     broker/       paper.py · kite.py · ccxt_bt.py · openalgo.py
     vault.py      Fernet-encrypted broker token storage
-    api.py        REST + WS + audit log (data/signals.json, orders.json)
-  static/demo.html  fake broker SPA for testing the overlay
-  tests/          pytest unit tests (CI runs them)
+    api.py        REST + WS + error envelope + /api/v1 surface
+  static/dashboard.html  full dashboard (signals, research+AI, risk, execution)
+  tests/          pytest suite (181 tests; see docs/TESTING.md)
+  scripts/        smoke.ps1 — boot + end-to-end endpoint smoke test
 extension/        Chrome MV3 extension (overlay + popup)
+docs/             17 markdown docs (see index below)
 .github/workflows/ci.yml
 ```
+
+## Documentation (docs/)
+
+| Doc | Covers |
+|---|---|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | system overview, data flow |
+| [API.md](docs/API.md) | endpoints, auth, error envelope, WebSocket |
+| [SECURITY.md](docs/SECURITY.md) | threat model, sessions, CSRF, secrets |
+| [RISK.md](docs/RISK.md) | modes, limits, breaker, reconciliation |
+| [BACKTESTING.md](docs/BACKTESTING.md) | execution-cost model, honesty rules |
+| [RESEARCH.md](docs/RESEARCH.md) | dossiers, walk-forward, bootstrap, gates |
+| [STRATEGIES.md](docs/STRATEGIES.md) | configs, lifecycle ladder, scores |
+| [SIGNALS.md](docs/SIGNALS.md) | generation, deterministic ids, state machine |
+| [EXECUTION.md](docs/EXECUTION.md) | ledger, reconciliation, closed trades |
+| [STORAGE.md](docs/STORAGE.md) | SQLite, migrations, legacy import |
+| [AI_ANALYST.md](docs/AI_ANALYST.md) | local Qwen analyst rules |
+| [DASHBOARD.md](docs/DASHBOARD.md) | SPA sections, auth, refresh |
+| [OBSERVABILITY.md](docs/OBSERVABILITY.md) | event log, request ids, health/metrics |
+| [OPERATIONS.md](docs/OPERATIONS.md) | daily ritual, troubleshooting |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | install, env vars, going live |
+| [TESTING.md](docs/TESTING.md) | test layout, isolation, CI |
+| [CI_AND_SMOKE.md](docs/CI_AND_SMOKE.md) | CI workflow + smoke script |
+| [AUDIT.md](docs/AUDIT.md) | security review findings (history) |
 
 ## Quick start (zero cost, 5 minutes)
 
