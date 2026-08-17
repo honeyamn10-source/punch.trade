@@ -8,7 +8,22 @@ open/high/low/close/volume/ts and return a list aligned to the input
 
 from __future__ import annotations
 
+import math
 from typing import List, Optional
+
+
+def _require_finite(values: List[float], name: str) -> None:
+    for i, v in enumerate(values):
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
+            raise ValueError(f"{name}: non-finite input at index {i}")
+
+
+def _require_bar_finite(bars: List[dict], name: str) -> None:
+    for i, b in enumerate(bars):
+        for key in ("open", "high", "low", "close", "volume"):
+            v = b.get(key)
+            if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
+                raise ValueError(f"{name}: non-finite {key} at bar {i}")
 
 
 def closes(bars: List[dict]) -> List[float]:
@@ -16,6 +31,7 @@ def closes(bars: List[dict]) -> List[float]:
 
 
 def sma(values: List[float], period: int) -> List[Optional[float]]:
+    _require_finite(values, "sma")
     out: List[Optional[float]] = [None] * len(values)
     running = 0.0
     for i, v in enumerate(values):
@@ -28,6 +44,7 @@ def sma(values: List[float], period: int) -> List[Optional[float]]:
 
 
 def ema(values: List[float], period: int) -> List[Optional[float]]:
+    _require_finite(values, "ema")
     out: List[Optional[float]] = [None] * len(values)
     if not values:
         return out
@@ -41,6 +58,7 @@ def ema(values: List[float], period: int) -> List[Optional[float]]:
 
 
 def rsi(values: List[float], period: int = 14) -> List[Optional[float]]:
+    _require_finite(values, "rsi")
     out: List[Optional[float]] = [None] * len(values)
     if len(values) < period + 1:
         return out
@@ -52,20 +70,23 @@ def rsi(values: List[float], period: int = 14) -> List[Optional[float]]:
         losses.append(max(-change, 0.0))
     avg_gain = sum(gains[:period]) / period
     avg_loss = sum(losses[:period]) / period
-    if avg_loss == 0:
-        out[period] = 100.0
-    else:
-        rs = avg_gain / avg_loss
-        out[period] = 100.0 - (100.0 / (1.0 + rs))
+    out[period] = _rsi_from_avgs(avg_gain, avg_loss)
     for i in range(period + 1, len(values)):
         avg_gain = (avg_gain * (period - 1) + gains[i - 1]) / period
         avg_loss = (avg_loss * (period - 1) + losses[i - 1]) / period
-        if avg_loss == 0:
-            out[i] = 100.0
-        else:
-            rs = avg_gain / avg_loss
-            out[i] = 100.0 - (100.0 / (1.0 + rs))
+        out[i] = _rsi_from_avgs(avg_gain, avg_loss)
     return out
+
+
+def _rsi_from_avgs(avg_gain: float, avg_loss: float) -> float:
+    """Wilder RSI from average gain/loss. Flat series (both zero) is
+    neutral 50.0; zero average loss alone is 100.0 (no downside)."""
+    if avg_loss == 0 and avg_gain == 0:
+        return 50.0
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
 
 
 def crossed_below(series: List[Optional[float]], index: int, level: float) -> bool:
@@ -132,6 +153,7 @@ def donchian(values: List[float], period: int = 20) -> Dict[str, List[Optional[f
 
 
 def vwap(bars: List[dict], period: int = 20) -> List[Optional[float]]:
+    _require_bar_finite(bars, 'vwap')
     """Rolling volume-weighted average price (typical price weighted)."""
     out: List[Optional[float]] = [None] * len(bars)
     cum_pv = 0.0
@@ -165,6 +187,7 @@ def _wilder_smooth(values: List[float], period: int) -> List[float]:
 
 
 def atr(bars: List[dict], period: int = 14) -> List[Optional[float]]:
+    _require_bar_finite(bars, 'atr')
     """Average True Range (Wilder). Classic volatility measure."""
     n = len(bars)
     out: List[Optional[float]] = [None] * n
@@ -181,6 +204,7 @@ def atr(bars: List[dict], period: int = 14) -> List[Optional[float]]:
 
 
 def stochastic(bars: List[dict], period: int = 14, smooth_k: int = 3) -> List[Optional[float]]:
+    _require_bar_finite(bars, 'stochastic')
     """Stochastic %K (fast, smoothed). Values 0-100; <20 oversold, >80 overbought."""
     n = len(bars)
     out: List[Optional[float]] = [None] * n
@@ -198,6 +222,7 @@ def stochastic(bars: List[dict], period: int = 14, smooth_k: int = 3) -> List[Op
 
 
 def adx(bars: List[dict], period: int = 14) -> List[Optional[float]]:
+    _require_bar_finite(bars, 'adx')
     """Average Directional Index (Wilder). >25 = trend, <20 = range."""
     n = len(bars)
     out: List[Optional[float]] = [None] * n

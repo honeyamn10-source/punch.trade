@@ -18,6 +18,7 @@ from typing import Callable, Dict, List, Optional
 
 from . import config
 from .engine import StrategyRunner
+from .market import Candle, DataQualityTracker, MarketDataError, normalize_timeframe
 
 
 class CandleBuilder:
@@ -57,7 +58,11 @@ class LiveFeed:
         self.candle_interval = candle_interval
         self.bars: Dict[str, List[dict]] = {}
         self.last_ts: Dict[str, float] = {}  # symbol -> last ingested bar ts
+        self.last_closed_ts: Dict[str, float] = {}
         self.last_error: Dict[str, str] = {}  # symbol -> last poll error
+        self.quality = DataQualityTracker()
+        self.reconnect_count = 0
+        self.timeframe = "5m"
         self._tasks: List[asyncio.Task] = []
         self._last_ohlcv_ts: Dict[str, float] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -86,26 +91,48 @@ class LiveFeed:
         return sorted({r.strategy["symbol"] for r in self.runners.values()})
 
     def health(self) -> List[dict]:
-        """Per-symbol feed health for /api/system/health and the dashboard."""
+        """Per-symbol feed health for /api/system/status and the dashboard."""
         now = time.time()
         out = []
         for symbol in self.symbols():
             last = self.last_ts.get(symbol, 0.0)
             stale_after = (config.LIVE_FEED_STALE_AFTER
                            if self.broker.name != "paper" else config.FEED_STALE_AFTER)
+            q = self.quality.status(symbol)
             out.append({
                 "symbol": symbol,
                 "source": self.broker.name,
+                "synthetic": self.broker.name == "paper",
                 "bars": len(self.bars.get(symbol, [])),
                 "lastBarAgeSec": round(now - last, 1) if last else None,
+                "lastClosedCandleTs": self.last_closed_ts.get(symbol),
                 "stale": bool(last) and (now - last) > stale_after,
+                "quality": q,
+                "reconnectCount": self.reconnect_count,
                 "lastError": self.last_error.get(symbol),
+                **self.quality.summary(symbol),
             })
         return out
 
     # ---- candle ingestion -----------------------------------------------
-    def ingest_bar(self, symbol: str, bar: dict) -> None:
-        self.last_ts[symbol] = bar.get("ts", time.time())
+    def ingest_bar(self, symbol: str, bar: dict, source: Optional[str] = None) -> None:
+        """Canonical path: any provider bar -> validated Candle -> engine.
+
+        Corrupted candles are quarantined (counted, dropped) instead of
+        being fed to strategies.
+        """
+        try:
+            c = Candle.from_legacy_bar(symbol, bar, timeframe=self.timeframe,
+                                       source=source or self.broker.name)
+            c.validate()
+        except (MarketDataError, KeyError, TypeError, ValueError) as e:
+            self.quality.mark_invalid(symbol)
+            self.last_error[symbol] = f"invalid candle: {e}"
+            return
+        self.quality.observe(c)
+        self.last_ts[symbol] = c.close_time
+        if c.closed:
+            self.last_closed_ts[symbol] = c.close_time
         self.last_error.pop(symbol, None)
         series = self.bars.setdefault(symbol, [])
         series.append(bar)
@@ -150,7 +177,7 @@ class LiveFeed:
                        "low": min(prev, close) * (1 - abs(random.gauss(0, 0.003))),
                        "close": close,
                        "volume": random.randint(1000, 40000)}
-                self.ingest_bar(symbol, bar)
+                self.ingest_bar(symbol, bar, source="paper-synthetic")
 
     # ---- binance --------------------------------------------------------
     async def _binance_loop(self) -> None:

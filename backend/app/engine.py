@@ -74,7 +74,11 @@ class StrategyRunner:
 
         entry = self.strategy["entry"]
         exit_cfg = self.strategy["exit"]
-        series = compute_indicator(entry["indicator"], entry["period"], bars)
+        try:
+            series = compute_indicator(entry["indicator"], entry["period"], bars)
+        except (ValueError, KeyError, TypeError):
+            # corrupt/non-finite bar: no evaluation this candle
+            return None
         closes = [b["close"] for b in bars]
 
         if state == "active":
