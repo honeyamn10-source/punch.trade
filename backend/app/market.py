@@ -97,10 +97,17 @@ class Candle:
     @classmethod
     def from_legacy_bar(cls, symbol: str, bar: dict,
                         timeframe: str = "5m", source: str = "legacy") -> "Candle":
-        """Wrap the old {ts,open,high,low,close,volume} dict format."""
+        """Wrap the old {ts,open,high,low,close,volume} dict format.
+
+        ``ts`` is the candle's CLOSE timestamp (provider convention), so the
+        open time is derived as close - timeframe interval. This keeps legacy
+        bars valid under validate_candle (close_time > open_time).
+        """
+        tf = normalize_timeframe(timeframe)
         ts = float(bar.get("ts", 0))
-        return cls(symbol=symbol, timeframe=normalize_timeframe(timeframe),
-                   open_time=ts, close_time=ts, closed=True, source=source,
+        return cls(symbol=symbol, timeframe=tf,
+                   open_time=ts - TIMEFRAME_SECONDS[tf], close_time=ts,
+                   closed=True, source=source,
                    open=float(bar["open"]), high=float(bar["high"]),
                    low=float(bar["low"]), close=float(bar["close"]),
                    volume=float(bar.get("volume", 0.0)))

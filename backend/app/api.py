@@ -24,6 +24,7 @@ from . import config
 from . import risk
 from . import vault
 from .backtest import ExecutionCostConfig, backtest
+from . import execution
 from .broker.base import BrokerError
 from .broker.ccxt_bt import CCXTBroker
 from .broker.kite import KiteAdapter, generate_session, login_url
@@ -143,6 +144,10 @@ class ResearchReq(BacktestReq):
     walkForwardWindows: int = 4
     bootstrapIterations: int = 200
     seed: int = 42
+
+
+class BrokerReq(BaseModel):
+    broker: str = "paper"
 
 
 class OrderReq(BaseModel):
@@ -494,6 +499,34 @@ def risk_breaker_reset(_: None = Depends(require_token)) -> dict:
     return risk.reset_breaker()
 
 
+@app.get("/api/execution/ledger")
+def execution_ledger(_: None = Depends(require_token)) -> dict:
+    """Order state machine ledger (PENDING/SUBMITTED/FILLED/REJECTED/UNKNOWN)."""
+    return {"orders": execution.ledger()}
+
+
+@app.get("/api/execution/trades")
+def execution_trades(_: None = Depends(require_token)) -> dict:
+    """Closed CompletedTrades (one position = one trade), newest last."""
+    return {"trades": list(reversed(execution.closed_trades()))}
+
+
+@app.post("/api/execution/reconcile")
+def execution_reconcile(req: BrokerReq, _: None = Depends(require_token)) -> dict:
+    """Compare the ledger against the broker's view; gates live orders."""
+    adapter = brokers.get(req.broker)
+    return execution.reconcile(req.broker, adapter)
+
+
+@app.get("/api/execution/reconciliation")
+def execution_reconciliation(_: None = Depends(require_token)) -> dict:
+    """Reconciliation state for every connected broker."""
+    out = {}
+    for name, adapter in brokers.adapters.items():
+        out[name] = execution.reconcile(name, adapter)
+    return {"brokers": out}
+
+
 @app.post("/api/broker/kite/login-url")
 def kite_login_url(req: LoginUrlReq, _: None = Depends(require_token)) -> dict:
     try:
@@ -638,7 +671,18 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
             adapter.place_bracket, req.symbol, req.side, req.qty,
             req.entry, req.targetPrice, req.stopLoss, True, None, targets)
     except BrokerError as e:
+        if req.clientRequestId or req.signalId:
+            order_id = req.clientRequestId or req.signalId or "unknown"
+            execution.mark(order_id, "REJECTED")
         raise HTTPException(status_code=502, detail=str(e))
+
+    # execution ledger: broker order id is the key (paper closes match it)
+    order_id = result.get("orderId") or req.clientRequestId or req.signalId
+    execution.record_order(
+        order_id, signal_id=req.signalId, strategy_id=req.strategyId,
+        symbol=req.symbol, side=req.side, qty=req.qty, entry=req.entry,
+        broker=req.broker, client_request_id=req.clientRequestId)
+    execution.mark(order_id, "FILLED" if req.broker == "paper" else "SUBMITTED")
 
     if req.signalId:
         _update_signal(req.signalId, status="EXECUTED")

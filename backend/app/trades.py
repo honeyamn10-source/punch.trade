@@ -47,6 +47,8 @@ class CompletedTrade:
                  qty: float, entry_ts: float, entry_price: float,
                  entry_commission: float = 0.0,
                  timeframe: str = "5m", regime: str = "UNKNOWN"):
+        import uuid
+        self.id = f"t-{uuid.uuid4().hex[:12]}"
         self.signal_id = signal_id
         self.strategy_id = strategy_id
         self.strategy_version = strategy_version
@@ -119,6 +121,7 @@ class CompletedTrade:
     # ------------------------------------------------------------- dto ----
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
             "signalId": self.signal_id,
             "strategyId": self.strategy_id,
             "strategyVersion": self.strategy_version,

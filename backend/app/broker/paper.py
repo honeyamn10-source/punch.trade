@@ -110,7 +110,20 @@ class PaperBroker(BrokerAdapter):
             else:
                 p["pnl_pct"] = round((bar["close"] - p["entry"]) / p["entry"] * 100, 2)
                 continue
+        if closed:
+            self._book_closed_trades(closed)
         return closed
+
+    @staticmethod
+    def _book_closed_trades(closed: List[dict]) -> None:
+        """Group exit events by position and book ONE CompletedTrade per
+        fully-closed position (execution layer does the accounting)."""
+        from .. import execution
+        groups: dict = {}
+        for e in closed:
+            groups.setdefault(e["id"], []).append(e)
+        for pos_id, events in groups.items():
+            execution.record_closed_trade(pos_id, events)
 
     def _exit_fraction(self, p: dict, price: float, label: str, qty: float, closed: List[dict]) -> None:
         p["remaining_qty"] -= qty
@@ -126,9 +139,6 @@ class PaperBroker(BrokerAdapter):
             p["exit_price"] = round(price, 2)
             p["pnl_pct"] = round(realized, 2)
             event["status"] = "closed"
-            # feed the circuit breaker: net outcome of the full position
-            from .. import risk as risk_mod
-            risk_mod.record_trade_result(win=realized > 0)
         closed.append(event)
 
     def get_positions(self) -> List[Dict]:
