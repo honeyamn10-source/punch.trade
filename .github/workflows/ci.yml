@@ -35,6 +35,8 @@ jobs:
           pip install pytest pytest-cov
       - name: Run test suite
         run: pytest --cov --cov-report=xml:coverage.xml -q
+        env:
+          PYTHONPATH: backend
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
