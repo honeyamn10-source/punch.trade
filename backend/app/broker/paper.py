@@ -126,6 +126,9 @@ class PaperBroker(BrokerAdapter):
             p["exit_price"] = round(price, 2)
             p["pnl_pct"] = round(realized, 2)
             event["status"] = "closed"
+            # feed the circuit breaker: net outcome of the full position
+            from .. import risk as risk_mod
+            risk_mod.record_trade_result(win=realized > 0)
         closed.append(event)
 
     def get_positions(self) -> List[Dict]:

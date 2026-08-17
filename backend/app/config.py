@@ -31,6 +31,10 @@ VALID_MODES = ("research", "paper", "live")
 SIGNAL_TTL_SECONDS = float(os.environ.get("PUNCH_SIGNAL_TTL", 300))
 # An "active" strategy state auto-resets after this many bars (anti-wedge).
 EXIT_TIMEOUT_BARS = int(os.environ.get("PUNCH_EXIT_TIMEOUT_BARS", 120))
+# Circuit breaker: open after this many consecutive losing trades.
+CIRCUIT_BREAKER_LOSSES = int(os.environ.get("PUNCH_CIRCUIT_BREAKER_LOSSES", 3))
+# Default risk per trade for the sizing helper (fraction of equity).
+RISK_PER_TRADE_PCT = float(os.environ.get("PUNCH_RISK_PER_TRADE_PCT", 0.01))
 # Max open positions across all symbols (paper broker tracks its own).
 MAX_OPEN_POSITIONS = int(os.environ.get("PUNCH_MAX_POSITIONS", 5))
 # Max shares/lots per order.

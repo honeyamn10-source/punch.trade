@@ -110,6 +110,9 @@ def status() -> dict:
         "startedAt": _started_at,
         "uptimeSec": round(time.time() - _started_at, 1),
         "signalsTtlSec": config.SIGNAL_TTL_SECONDS,
+        "consecutiveLosses": _consecutive_losses,
+        "breakerOpen": _breaker_open,
+        "reconciliationOk": _recon_ok,
     }
 
 
@@ -132,6 +135,10 @@ def check(*, broker: str, signal: Optional[dict] = None,
         raise RiskError("NOT_ARMED",
                         f"broker '{broker}' is not armed for LIVE execution "
                         "(POST /api/system/arm)", status=409)
+
+    check_circuit_breaker()
+    if broker != "paper":
+        check_reconciliation()
 
     if feed is not None and symbol is not None:
         last_ts = getattr(feed, "last_ts", {}).get(symbol, 0.0)
@@ -170,3 +177,99 @@ def enforce_limits(*, qty: int, open_positions: int,
     if entry <= 0 or target <= 0 or stop <= 0:
         raise RiskError("INVALID_PRICE", "entry/target/stop must be positive",
                         status=422)
+
+
+# ------------------------------------------------------ circuit breaker --
+_consecutive_losses = 0
+_breaker_open = False
+_breaker_opened_at: Optional[float] = None
+
+
+def consecutive_losses() -> int:
+    return _consecutive_losses
+
+
+def breaker_open() -> bool:
+    return _breaker_open
+
+
+def record_trade_result(win: bool, realized_loss: float = 0.0) -> dict:
+    """Feed realized outcomes into the breaker + daily-loss accounting.
+    Returns the breaker state."""
+    global _consecutive_losses, _breaker_open, _breaker_opened_at
+    if not win:
+        _consecutive_losses += 1
+        if _consecutive_losses >= config.CIRCUIT_BREAKER_LOSSES:
+            _breaker_open = True
+            _breaker_opened_at = time.time()
+    else:
+        _consecutive_losses = 0
+        if _breaker_open:
+            # a win after the breaker opened resets it
+            _breaker_open = False
+            _breaker_opened_at = None
+    return {"consecutiveLosses": _consecutive_losses,
+            "breakerOpen": _breaker_open}
+
+
+def check_circuit_breaker() -> None:
+    if _breaker_open:
+        raise RiskError("CIRCUIT_BREAKER",
+                        f"circuit breaker open after {config.CIRCUIT_BREAKER_LOSSES} "
+                        f"consecutive losses (reset on next win or /api/system/stop)",
+                        status=409)
+
+
+def reset_breaker() -> dict:
+    global _consecutive_losses, _breaker_open, _breaker_opened_at
+    _consecutive_losses = 0
+    _breaker_open = False
+    _breaker_opened_at = None
+    return {"consecutiveLosses": 0, "breakerOpen": False}
+
+
+# -------------------------------------------------------------- sizing ----
+def size_position(*, equity: float, risk_pct: float, entry: float,
+                  stop: float, side: str = "buy") -> Dict:
+    """Fixed-fractional position sizing.
+
+    risk per trade = equity * risk_pct (default config.RISK_PER_TRADE_PCT).
+    qty = risk_amount / |entry - stop|, floored, capped at MAX_QTY.
+    Returns {qty, riskAmount, riskPerShare, equity}.
+    """
+    if equity <= 0:
+        raise RiskError("INVALID_EQUITY", "equity must be positive", status=422)
+    if not 0 < risk_pct <= 1:
+        raise RiskError("INVALID_RISK_PCT", "risk_pct must be in (0, 1]",
+                        status=422)
+    if entry <= 0 or stop <= 0 or entry == stop:
+        raise RiskError("INVALID_PRICE", "entry/stop must be positive and differ",
+                        status=422)
+    risk_amount = equity * risk_pct
+    distance = abs(entry - stop)
+    qty = int(risk_amount / distance)
+    qty = min(qty, config.MAX_QTY)
+    return {"qty": max(qty, 0), "riskAmount": round(risk_amount, 2),
+            "riskPerShare": round(distance, 4), "equity": round(equity, 2)}
+
+
+# ----------------------------------------------------- reconciliation ----
+_recon_ok = True
+
+
+def reconciliation_ok() -> bool:
+    return _recon_ok
+
+
+def set_reconciliation_ok(ok: bool) -> None:
+    """Called by the execution reconciliation pass. LIVE orders are gated
+    on this — if broker/local state can't be matched, new orders wait."""
+    global _recon_ok
+    _recon_ok = bool(ok)
+
+
+def check_reconciliation() -> None:
+    if not _recon_ok:
+        raise RiskError("RECONCILIATION_FAILED",
+                        "broker/local state could not be reconciled — refusing "
+                        "new orders until reconciliation passes", status=409)

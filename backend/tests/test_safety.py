@@ -24,6 +24,16 @@ class FakeFeed:
         self.last_ts = last_ts
 
 
+@pytest.fixture(autouse=True)
+def _reset_risk_state():
+    """Circuit-breaker/reconciliation state is module-global — isolate it."""
+    risk.reset_breaker()
+    risk.set_reconciliation_ok(True)
+    yield
+    risk.reset_breaker()
+    risk.set_reconciliation_ok(True)
+
+
 def test_mode_blocks_all_orders():
     risk.set_mode("research")
     with pytest.raises(risk.RiskError) as ei:

@@ -449,6 +449,51 @@ def strategy_statuses(_: None = Depends(require_token)) -> dict:
     return result
 
 
+@app.get("/api/risk/state")
+def risk_state(_: None = Depends(require_token)) -> dict:
+    """Breaker, consecutive losses, reconciliation flag, sizing defaults."""
+    return {
+        "mode": risk.mode(),
+        "armed": risk.armed(),
+        "consecutiveLosses": risk.consecutive_losses(),
+        "breakerOpen": risk.breaker_open(),
+        "reconciliationOk": risk.reconciliation_ok(),
+        "maxPositions": config.MAX_OPEN_POSITIONS,
+        "maxQty": config.MAX_QTY,
+        "maxDailyLossPct": config.MAX_DAILY_LOSS_PCT,
+        "riskPerTradePct": config.RISK_PER_TRADE_PCT,
+        "circuitBreakerLosses": config.CIRCUIT_BREAKER_LOSSES,
+    }
+
+
+class SizingReq(BaseModel):
+    equity: float
+    riskPct: Optional[float] = None
+    entry: float
+    stop: float
+    side: str = "buy"
+
+
+@app.post("/api/risk/sizing")
+def risk_sizing(req: SizingReq, _: None = Depends(require_token)) -> dict:
+    """Fixed-fractional position size for a trade."""
+    try:
+        return risk.size_position(
+            equity=req.equity,
+            risk_pct=req.riskPct if req.riskPct is not None
+            else config.RISK_PER_TRADE_PCT,
+            entry=req.entry, stop=req.stop, side=req.side)
+    except risk.RiskError as e:
+        raise HTTPException(status_code=e.status, detail={"code": e.code,
+                                                          "message": e.detail})
+
+
+@app.post("/api/risk/breaker/reset")
+def risk_breaker_reset(_: None = Depends(require_token)) -> dict:
+    """Manually reset the circuit breaker (also done by /api/system/stop)."""
+    return risk.reset_breaker()
+
+
 @app.post("/api/broker/kite/login-url")
 def kite_login_url(req: LoginUrlReq, _: None = Depends(require_token)) -> dict:
     try:
