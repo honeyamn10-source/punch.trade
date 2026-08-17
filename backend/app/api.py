@@ -479,6 +479,49 @@ def run_research(strategy_id: str, req: ResearchReq,
     return {"source": req.broker, **report}
 
 
+@app.get("/api/ai/status")
+def ai_status(_: None = Depends(require_token)) -> dict:
+    """Local LLM availability (auto-detected qwen2.5 model, never downloads)."""
+    from .ai import status as ai_status_info
+    return ai_status_info()
+
+
+@app.post("/api/ai/analyze/{strategy_id}")
+def ai_analyze(strategy_id: str, _: None = Depends(require_token)) -> dict:
+    """Local-model assessment of one strategy's research dossier.
+
+    Offline-safe: when no model is available the response carries an
+    `error` hint and `analysis: null` — never a crash, never a secret.
+    """
+    from .ai import analyze as ai_analyze_info
+    strategy = get_strategy(strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="Unknown strategy")
+    try:
+        from .research import ResearchConfig, research_report
+        from .strategy_status import live_drift, compute_status
+        adapter = brokers.adapters["paper"]
+        bars = adapter.get_historical_bars(strategy["symbol"], "5m", 30)
+        research = None
+        if len(bars) >= 100:
+            research = research_report(strategy, bars, ResearchConfig())
+        st = compute_status(strategy["id"], strategy.get("status", "DRAFT"),
+                            has_backtest=research is not None,
+                            research=research, drift=None)
+        drift = None
+        try:
+            drift = live_drift(strategy["id"], execution.closed_trades())
+        except Exception:
+            drift = None
+    except Exception:
+        research = None
+        st = {"status": "UNKNOWN", "reason": "context build failed",
+              "score": 0, "canPromoteTo": []}
+        drift = None
+    return ai_analyze_info(strategy, research=research,
+                           status=st, drift=drift)
+
+
 @app.get("/api/strategies/status")
 def strategy_statuses(_: None = Depends(require_token)) -> dict:
     """Lifecycle status + composite score per strategy (research cached
