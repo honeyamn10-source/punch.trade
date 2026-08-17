@@ -29,6 +29,8 @@ VALID_MODES = ("research", "paper", "live")
 # ---- risk limits (all enforced by app/risk.py at order time) ----
 # A signal older than this can no longer be executed.
 SIGNAL_TTL_SECONDS = float(os.environ.get("PUNCH_SIGNAL_TTL", 300))
+# An "active" strategy state auto-resets after this many bars (anti-wedge).
+EXIT_TIMEOUT_BARS = int(os.environ.get("PUNCH_EXIT_TIMEOUT_BARS", 120))
 # Max open positions across all symbols (paper broker tracks its own).
 MAX_OPEN_POSITIONS = int(os.environ.get("PUNCH_MAX_POSITIONS", 5))
 # Max shares/lots per order.

@@ -187,7 +187,8 @@ async def startup() -> None:
     if os.path.exists(SIGNALS_LOG) and not hub.signals:
         try:
             with open(SIGNALS_LOG, "r", encoding="utf-8") as f:
-                hub.signals = [json.loads(line) for line in f if line.strip()][-100:]
+                rows = [json.loads(line) for line in f if line.strip()]
+            hub.signals = deque(rows[-100:], maxlen=50)
         except Exception:
             pass
 
@@ -223,11 +224,27 @@ async def startup() -> None:
 
 
 def on_signal(signal: dict) -> None:
+    # deterministic-id dedup: reconnects/restarts/double events must not
+    # duplicate the same signal
+    if any(s.get("id") == signal["id"] for s in hub.signals):
+        return
     hub.signals.append(signal)
     _append_json(SIGNALS_LOG, signal)
     _loop.create_task(hub.broadcast({"type": "signal", "data": signal}))
     if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID:
         _loop.create_task(_telegram_push(signal))
+
+
+def _update_signal(signal_id: str, **fields) -> Optional[dict]:
+    """Apply a status/lifecycle change to an in-memory signal (validated)."""
+    from . import signals as sig_mod
+    for s in hub.signals:
+        if s.get("id") == signal_id:
+            new = sig_mod.with_status(s, fields.pop("status"), **fields)
+            hub.signals.remove(s)
+            hub.signals.appendleft(new)
+            return new
+    return None
 
 
 async def _telegram_push(signal: dict) -> None:
@@ -454,6 +471,12 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
                             entry=req.entry, target=req.targetPrice,
                             stop=req.stopLoss)
     except risk.RiskError as e:
+        if req.signalId:
+            _update_signal(req.signalId, status="REJECTED", rejection=e.code)
+            _loop.create_task(hub.broadcast(
+                {"type": "signal_update",
+                 "data": {"id": req.signalId, "status": "REJECTED",
+                          "rejection": e.code}}))
         raise _rejection(e)
 
     try:
@@ -462,6 +485,12 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
             req.entry, req.targetPrice, req.stopLoss, True, None, targets)
     except BrokerError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+    if req.signalId:
+        _update_signal(req.signalId, status="EXECUTED")
+        _loop.create_task(hub.broadcast(
+            {"type": "signal_update",
+             "data": {"id": req.signalId, "status": "EXECUTED"}}))
 
     record = {"ts": time.time(), "broker": req.broker, "strategyId": req.strategyId,
               "signalId": req.signalId, "clientRequestId": req.clientRequestId,

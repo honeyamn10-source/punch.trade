@@ -4,11 +4,43 @@ Strategies are plain dicts referencing the fixed indicator/condition
 library in indicators.py. This is the "safe" marketplace representation
 from the design: no arbitrary code execution, nothing a contributor can
 do except pick indicators and levels.
+
+Identity: strategy_id (stable, primary key) + version (bumped on any
+material trading-logic change). Historical signals/backtests/trades must
+preserve the parameter snapshot — never reconstruct history from current
+defaults.
 """
 
 from __future__ import annotations
 
+import copy
 from typing import Dict, List, Optional
+
+# per-strategy metadata: family / warmup / timeframes / status / reason
+_META: Dict[str, Dict] = {
+    "rsi-reversal": {"family": "mean-reversion", "warmup_bars": 15,
+                     "reason": "RSI({period}) crossed below {value} — oversold bounce setup"},
+    "ema-breakout": {"family": "trend", "warmup_bars": 21,
+                     "reason": "close crossed above EMA({period}) — momentum breakout"},
+    "sma-bounce": {"family": "trend", "warmup_bars": 51,
+                   "reason": "close crossed above SMA({period}) — bounce off support"},
+    "btc-rsi": {"family": "mean-reversion", "warmup_bars": 15,
+                "reason": "RSI({period}) crossed below {value} on BTC — dip buy"},
+    "macd-momentum": {"family": "momentum", "warmup_bars": 35,
+                      "reason": "MACD histogram crossed above 0 — momentum shift"},
+    "bb-reversion": {"family": "mean-reversion", "warmup_bars": 21,
+                     "reason": "close reclaimed the lower Bollinger band({period})"},
+    "donchian-breakout": {"family": "breakout", "warmup_bars": 21,
+                          "reason": "close broke the {period}-bar Donchian high — turtle breakout"},
+    "vwap-reversion": {"family": "mean-reversion", "warmup_bars": 21,
+                       "reason": "price dipped below rolling VWAP({period}) — reversion entry"},
+    "golden-cross": {"family": "trend", "warmup_bars": 51,
+                     "reason": "SMA(20) crossed above SMA(50) — golden cross"},
+    "stoch-reversal": {"family": "mean-reversion", "warmup_bars": 18,
+                       "reason": "Stochastic({period}) crossed below 20 — oversold snap-back"},
+    "adx-trend": {"family": "trend", "warmup_bars": 28,
+                  "reason": "ADX({period}) crossed above 25 — strong trend confirmed"},
+}
 
 STRATEGIES: List[Dict] = [
     {
@@ -142,6 +174,44 @@ def get_strategy(strategy_id: str) -> Optional[Dict]:
     return None
 
 
+def strategy_metadata(strategy: Dict) -> Dict:
+    """Merge identity/metadata fields into a strategy (never mutates)."""
+    meta = _META.get(strategy["id"], {})
+    return {
+        **strategy,
+        "version": strategy.get("version", "1.0.0"),
+        "family": meta.get("family", "unclassified"),
+        "warmup_bars": meta.get("warmup_bars", 20),
+        "supported_timeframes": strategy.get("supported_timeframes", ["5m"]),
+        "enabled": strategy.get("enabled", True),
+        "status": strategy.get("status", "BACKTESTED"),
+        "reason_template": meta.get("reason", "signal fired"),
+        "intrabar_capable": strategy.get("intrabar_capable", False),
+    }
+
+
+def parameter_snapshot(strategy: Dict) -> Dict:
+    """Exact tunable parameters at signal/backtest time.
+
+    Persisted with every signal/backtest/trade — historical objects must
+    never be reconstructed from current defaults.
+    """
+    snap = {
+        "entry": copy.deepcopy(strategy.get("entry")),
+        "exit": copy.deepcopy(strategy.get("exit")),
+        "tp_levels": target_levels(strategy),
+        "sl_pct": strategy.get("sl_pct", 1.0),
+    }
+    if "tp_pct" in strategy:
+        snap["tp_pct"] = strategy["tp_pct"]
+    return snap
+
+
+def strategy_id(strategy: Dict) -> str:
+    """Canonical identity: id@version."""
+    return f"{strategy['id']}@{strategy.get('version', '1.0.0')}"
+
+
 def target_levels(strategy: Dict) -> List[float]:
     """Multi-level take-profit percentages. Defaults to the single tp_pct."""
     levels = strategy.get("tp_levels")
@@ -198,34 +268,55 @@ def condition_met(condition: Dict, series: List[Optional[float]], index: int,
     indicator series and tests a cross between the two (e.g. SMA20
     crossing SMA50 — golden cross). Otherwise the level is a fixed number.
     """
+    return explain_condition(condition, series, index,
+                             closes_series, bars)["passed"]
+
+
+def explain_condition(condition: Dict, series: List[Optional[float]], index: int,
+                      closes_series: Optional[List[float]] = None,
+                      bars: Optional[List[dict]] = None) -> Dict:
+    """Like condition_met but returns a structured explanation:
+    {name, value, operator, threshold, passed} — the "why did this fire"
+    payload for signals and the dashboard.
+    """
     from . import indicators
 
     level = condition["value"]
+    indicator = condition.get("indicator", "?")
+    period = condition.get("period", 0)
+    op = "crosses_above" if condition.get("condition") == "crosses_above" else "crosses_below"
+
+    def result(value, threshold, passed):
+        return {"name": f"{indicator}({period})", "value": value,
+                "operator": op, "threshold": threshold, "passed": passed}
+
     if isinstance(level, dict):
         other = compute_indicator(level["indicator"], level["period"], bars or [])
         if len(other) <= index or any(
                 v is None for v in (series[index - 1], series[index],
                                     other[index - 1], other[index])):
-            return False
-        if condition["condition"] == "crosses_above":
-            return series[index - 1] <= other[index - 1] and series[index] > other[index]
-        if condition["condition"] == "crosses_below":
-            return series[index - 1] >= other[index - 1] and series[index] < other[index]
-        raise ValueError(f"Unknown condition: {condition['condition']}")
+            return result(None, f"{level['indicator']}({level['period']})", False)
+        if op == "crosses_above":
+            return result(round(series[index], 4),
+                          f"{level['indicator']}({level['period']})={round(other[index], 4)}",
+                          series[index - 1] <= other[index - 1] and series[index] > other[index])
+        return result(round(series[index], 4),
+                      f"{level['indicator']}({level['period']})={round(other[index], 4)}",
+                      series[index - 1] >= other[index - 1] and series[index] < other[index])
     if level == "self":
         if closes_series is None:
-            return False
+            return result(None, "close", False)
         ind_prev, ind_cur = series[index - 1], series[index]
         c_prev, c_cur = closes_series[index - 1], closes_series[index]
         if None in (ind_prev, ind_cur):
-            return False
-        if condition["condition"] == "crosses_above":
-            return c_prev <= ind_prev and c_cur > ind_cur
-        if condition["condition"] == "crosses_below":
-            return c_prev >= ind_prev and c_cur < ind_cur
-        raise ValueError(f"Unknown condition: {condition['condition']}")
-    if condition["condition"] == "crosses_below":
-        return indicators.crossed_below(series, index, level)
-    if condition["condition"] == "crosses_above":
-        return indicators.crossed_above(series, index, level)
-    raise ValueError(f"Unknown condition: {condition['condition']}")
+            return result(None, f"close={round(c_cur, 4) if c_cur is not None else '?'}", False)
+        if op == "crosses_above":
+            return result(round(c_cur, 4), f"{indicator}({period})={round(ind_cur, 4)}",
+                          c_prev <= ind_prev and c_cur > ind_cur)
+        return result(round(c_cur, 4), f"{indicator}({period})={round(ind_cur, 4)}",
+                      c_prev >= ind_prev and c_cur < ind_cur)
+    if op == "crosses_below":
+        return result(round(series[index], 4) if series[index] is not None else None,
+                      level, indicators.crossed_below(series, index, level))
+    return result(round(series[index], 4) if series[index] is not None else None,
+                  level, indicators.crossed_above(series, index, level))

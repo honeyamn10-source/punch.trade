@@ -188,3 +188,47 @@ def is_fresh(last_ts: float, now: Optional[float] = None,
     """True when a feed timestamp is within the staleness window."""
     now = now if now is not None else time.time()
     return bool(last_ts) and (now - last_ts) <= stale_after
+
+
+# ------------------------------------------------------------ regime ----
+REGIMES = ("TRENDING_HIGH_VOL", "TRENDING_LOW_VOL",
+           "RANGING_HIGH_VOL", "RANGING_LOW_VOL", "UNKNOWN")
+
+# documented thresholds (5m-bar scale; tune per timeframe if ever needed)
+TREND_MIN_SLOPE = 0.0005    # |SMA20 slope per bar| above this = trending
+VOL_MIN_ATR_PCT = 0.004     # ATR14/close above this = high vol
+
+
+def regime_of(bars: List[dict], sma_period: int = 20,
+              atr_period: int = 14, lookback: int = 10) -> str:
+    """Deterministic regime classifier.
+
+    Formulas:
+        slope = (SMA20[i] - SMA20[i-lookback]) / SMA20[i-lookback] / lookback
+        atr_pct = ATR14[i] / close[i]
+    trend  = |slope| >= TREND_MIN_SLOPE
+    vol    = atr_pct >= VOL_MIN_ATR_PCT
+    < 60 bars of data -> UNKNOWN
+    """
+    from . import indicators as ind
+
+    n = len(bars)
+    if n < 60 or n < lookback + sma_period + atr_period + 1:
+        return "UNKNOWN"
+    closes = ind.closes(bars)
+    sma = ind.sma(closes, sma_period)
+    atr = ind.atr(bars, atr_period)
+    if sma[-1] is None or sma[-1 - lookback] is None or atr[-1] is None:
+        return "UNKNOWN"
+    base = sma[-1 - lookback]
+    slope = ((sma[-1] - base) / base) / lookback if base else 0.0
+    atr_pct = atr[-1] / closes[-1] if closes[-1] else 0.0
+    trend = abs(slope) >= TREND_MIN_SLOPE
+    vol = atr_pct >= VOL_MIN_ATR_PCT
+    if trend and vol:
+        return "TRENDING_HIGH_VOL"
+    if trend:
+        return "TRENDING_LOW_VOL"
+    if vol:
+        return "RANGING_HIGH_VOL"
+    return "RANGING_LOW_VOL"
