@@ -157,20 +157,26 @@ def test_engine_reactivates_after_exit():
 def test_backtest_reuses_engine():
     strategy = dict(RSI_STRAT)
     bars = _bars(_rsi_cross_series() + _rsi_cross_series())
-    result = backtest(strategy, bars)
+    # position_pct < 1 so both trades can open (honest capital model)
+    from app.backtest import ExecutionCostConfig
+    result = backtest(strategy, bars, ExecutionCostConfig(position_pct=0.1))
     assert result["trades"] == 2
-    assert 0 <= result["winRate"] <= 100
-    assert result["maxDrawdownPct"] >= 0
-    assert result["exitSplit"].get("TP1", 0) + result["exitSplit"].get("SL", 0) == result["trades"]
+    assert 0 <= result["metrics"]["win_rate"] <= 100
+    assert result["metrics"]["max_drawdown_pct"] >= 0
+    assert (result["exitSplit"].get("TP1", 0)
+            + result["exitSplit"].get("TP2", 0)
+            + result["exitSplit"].get("TP3", 0)
+            + result["exitSplit"].get("STOP", 0)) == result["trades"]
 
 
 def test_backtest_metrics_present():
     strategy = dict(RSI_STRAT)
     result = backtest(strategy, _bars(_rsi_cross_series() + _rsi_cross_series()))
-    assert "sharpe" in result and "profitFactor" in result
-    assert "avgWinPct" in result and "avgLossPct" in result
-    assert result["profitFactor"] >= 0
-    assert result["sharpe"] >= -100  # sane bound
+    m = result["metrics"]
+    assert "sharpe" in m and "profit_factor" in m
+    assert "avg_win" in m and "avg_loss" in m
+    assert m["profit_factor"] >= 0
+    assert m["sharpe"] >= -100  # sane bound
 
 
 MULTI_TP_STRAT = {
@@ -182,30 +188,33 @@ MULTI_TP_STRAT = {
 
 
 def test_backtest_multi_tp_partial_fills():
-    """A steady rally after entry should hit TP1 then TP2 - two exits per trade."""
+    """A steady rally after entry should hit TP1 then TP2 - ONE trade per
+    position, two fills inside it (honest one-position-one-trade model)."""
     prices = [100] * 25
     for i in range(40):
         prices.append(100 + (i + 1) * 0.75)  # +30% drift, never retraces to SL
     bars = _bars(prices)
     result = backtest(MULTI_TP_STRAT, bars)
-    assert result["trades"] == 2
-    assert result["exitSplit"].get("TP1") == 1
+    assert result["trades"] == 1
     assert result["exitSplit"].get("TP2") == 1
+    fills = [f["reason"] for t in result["tradeList"] for f in t["fills"]]
+    assert fills.count("TP1") == 1 and fills.count("TP2") == 1
 
 
 def test_backtest_sl_closes_remaining_after_tp1():
-    """TP1 hits (half closed), then SL takes the rest - two exits, one loss."""
+    """TP1 hits (half closed), then SL takes the rest - one trade, LOSS."""
     prices = [100] * 40
-    for i in range(2):
-        prices.append(100 + (i + 1) * 1.1)  # rally to ~+2.2% > TP1 (+1%), below TP2 (+3%)
+    prices += [101.5, 103.2, 105.5]  # rally strong enough to reach TP1 from next-open entry
     last = prices[-1]
     for i in range(20):
         prices.append(last - (i + 1) * 2.0)  # steady decline through SL (no gap)
     bars = _bars(prices)
     result = backtest(MULTI_TP_STRAT, bars)
-    assert result["exitSplit"].get("TP1") == 1
-    assert result["exitSplit"].get("SL") == 1
-    assert result["trades"] == 2
+    assert result["exitSplit"].get("STOP") == 1
+    assert result["trades"] == 1
+    t = result["tradeList"][0]
+    assert [f["reason"] for f in t["fills"]] == ["ENTRY", "TP1", "STOP"]
+    assert t["classification"] == "LOSS"
 
 
 def test_backtest_insufficient_data():

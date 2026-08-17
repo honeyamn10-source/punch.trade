@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from . import config
 from . import risk
 from . import vault
-from .backtest import backtest
+from .backtest import ExecutionCostConfig, backtest
 from .broker.base import BrokerError
 from .broker.ccxt_bt import CCXTBroker
 from .broker.kite import KiteAdapter, generate_session, login_url
@@ -126,6 +126,14 @@ class BacktestReq(BaseModel):
     broker: str = "paper"
     interval: str = "5m"
     days: int = 30
+    # execution-cost model (backtest.py::ExecutionCostConfig)
+    startingCapital: float = 1_000_000.0
+    positionPct: float = 1.0
+    commissionBps: float = 0.0
+    slippageBps: float = 0.0
+    spreadBps: float = 0.0
+    intrabarPolicy: str = "conservative"
+    gapPolicy: str = "fill_at_next_open"
 
 
 class OrderReq(BaseModel):
@@ -308,9 +316,15 @@ def strategy_leaderboard(_: None = Depends(require_token)) -> dict:
             stats = backtest(s, bars)
             if "error" in stats:
                 continue
+            m = stats["metrics"]
             rows.append({"id": s["id"], "name": s["name"], "symbol": s["symbol"],
-                         **{k: stats[k] for k in ("winRate", "netReturnPct", "maxDrawdownPct",
-                                                   "sharpe", "profitFactor", "trades")}})
+                         "winRate": m["win_rate"],
+                         "netReturnPct": round(
+                             m["net_pnl"] / 1_000_000 * 100, 2),
+                         "maxDrawdownPct": m["max_drawdown_pct"],
+                         "sharpe": m["sharpe"],
+                         "profitFactor": m["profit_factor"],
+                         "trades": m["trades"]})
         except Exception:
             continue
     rows.sort(key=lambda r: (r["sharpe"], r["winRate"]), reverse=True)
@@ -337,7 +351,15 @@ def run_backtest(strategy_id: str, req: BacktestReq, _: None = Depends(require_t
         bars = adapter.get_historical_bars(strategy["symbol"], req.interval, req.days)
     except BrokerError as e:
         raise HTTPException(status_code=502, detail=str(e))
-    return {"source": req.broker, "bars": len(bars), **backtest(strategy, bars)}
+    try:
+        costs = ExecutionCostConfig(
+            starting_capital=req.startingCapital, position_pct=req.positionPct,
+            commission_bps=req.commissionBps, slippage_bps=req.slippageBps,
+            spread_bps=req.spreadBps, intrabar_policy=req.intrabarPolicy,
+            gap_policy=req.gapPolicy)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"source": req.broker, "bars": len(bars), **backtest(strategy, bars, costs)}
 
 
 @app.post("/api/broker/kite/login-url")
