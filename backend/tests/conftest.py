@@ -15,6 +15,7 @@ def _isolate_storage(tmp_path, monkeypatch):
 
     import app.api as api
     import app.execution as execution
+    import app.security as security
 
     monkeypatch.setattr(config, "DATA_DIR", str(data_dir))
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "punch.db"))
@@ -24,6 +25,7 @@ def _isolate_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "POSITIONS_LOG", str(data_dir / "positions.json"))
     monkeypatch.setattr(execution, "DATA_DIR", str(data_dir))
     monkeypatch.setattr(execution, "TRADES_LOG", str(data_dir / "trades.json"))
+    security.clear_limits()
     db.reset()
     yield
     db.reset()

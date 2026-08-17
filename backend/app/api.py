@@ -15,14 +15,15 @@ import time
 from collections import deque
 from typing import Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config
 from . import db
 from . import risk
+from . import security
 from . import vault
 from .backtest import ExecutionCostConfig, backtest
 from . import execution
@@ -44,6 +45,22 @@ closed_positions: List[dict] = []
 _placed_keys: Dict[str, dict] = {}  # idempotency keys ("sig:<id>" / "req:<id>") -> record
 
 app = FastAPI(title="punch.trade", version="0.2.0")
+
+
+# -------------------------------------------------------------- security --
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """Rate-limit API traffic per client IP + security headers on all responses."""
+    if request.url.path.startswith("/api") and request.url.path != "/api/health":
+        try:
+            security.rate_limit_api(request)
+        except HTTPException as e:
+            return JSONResponse(status_code=e.status_code,
+                                content={"detail": e.detail},
+                                headers=e.headers or {})
+    response = await call_next(request)
+    security.apply_security_headers(response)
+    return response
 
 # ---------------------------------------------------------------- auth --
 def _check_token(token: str) -> bool:
@@ -303,6 +320,38 @@ def _append_json(path: str, record: dict) -> None:
 def health() -> dict:
     return {"status": "ok", "brokers": list(brokers.adapters.keys()),
             "connected": [n for n in brokers.adapters if n != "paper"]}
+
+
+@app.post("/api/system/login")
+def system_login(request: Request, response: Response,
+                 _: None = Depends(require_token),
+                 _rl: None = Depends(security.rate_limit_login)) -> dict:
+    """Dashboard session login. Requires the API token header; returns a
+    revocable session cookie (httpOnly) + CSRF cookie for same-origin
+    state changes. Raw session token is returned once in the body."""
+    token = security.create_session(
+        ip=request.client.host if request.client else "",
+        user_agent=request.headers.get("user-agent", ""))
+    csrf = security.csrf_cookie()
+    response.set_cookie(security.SESSION_COOKIE, token, httponly=True,
+                        samesite="strict", max_age=security.SESSION_TTL_SECONDS,
+                        path="/", secure=False)
+    response.set_cookie(security.CSRF_COOKIE, csrf, httponly=False,
+                        samesite="strict", max_age=security.SESSION_TTL_SECONDS,
+                        path="/", secure=False)
+    return {"session": token, "csrf": csrf,
+            "expiresIn": security.SESSION_TTL_SECONDS}
+
+
+@app.post("/api/system/logout")
+def system_logout(request: Request, response: Response,
+                  _session: None = Depends(security.require_session),
+                  _csrf: None = Depends(security.require_csrf)) -> dict:
+    """Revoke the dashboard session (CSRF-protected)."""
+    security.revoke_session(request.cookies.get(security.SESSION_COOKIE))
+    response.delete_cookie(security.SESSION_COOKIE, path="/")
+    response.delete_cookie(security.CSRF_COOKIE, path="/")
+    return {"ok": True}
 
 
 @app.get("/api/system/storage")
@@ -710,6 +759,7 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
               "symbol": req.symbol, "side": req.side, "qty": req.qty,
               "entry": req.entry, "target": req.targetPrice, "stop": req.stopLoss,
               "mode": risk.mode(), "result": result}
+    record = security.sanitize_dict(record)
     _append_json(ORDERS_LOG, record)
     if idem_key:
         _placed_keys[idem_key] = record

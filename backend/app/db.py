@@ -29,7 +29,7 @@ from typing import Dict, List, Optional
 
 from . import config
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # ordered migrations: (version, sql) — applied in a transaction, in order
 MIGRATIONS: List[tuple] = [
@@ -77,6 +77,15 @@ CREATE TABLE IF NOT EXISTS strategy_status (
     id TEXT PRIMARY KEY,
     payload TEXT NOT NULL,
     ts REAL NOT NULL
+);
+"""),
+    (2, """
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    expires_at REAL NOT NULL,
+    created_at REAL NOT NULL,
+    ip TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT ''
 );
 """),
 ]
@@ -406,5 +415,5 @@ def storage_status() -> dict:
         "schemaVersion": int(row["value"]) if row else 0,
         "counts": {t: row_count(t) for t in
                    ("signals", "orders", "positions", "trades",
-                    "research_runs", "strategy_status")},
+                    "research_runs", "strategy_status", "sessions")},
     }
