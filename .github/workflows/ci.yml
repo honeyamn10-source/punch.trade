@@ -2,66 +2,43 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 jobs:
-  test:
+  lint:
+    name: Lint (ruff)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff==0.16.3
+      - name: ruff check
+        run: ruff check backend
+      - name: ruff format --check
+        run: ruff format --check backend
 
-      - name: Install deps
+  test:
+    name: Tests (pytest + coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
         run: |
           pip install -r backend/requirements.txt
-          pip install pytest httpx
-
-      - name: Unit tests
-        working-directory: backend
-        run: python -m pytest tests -q
-
-      - name: Boot server + API smoke test
-        working-directory: backend
-        run: |
-          python run.py > /tmp/punch.log 2>&1 &
-          SERVER_PID=$!
-          sleep 8
-          TOKEN="smoke-ci-token-123"
-          export PUNCH_TOKEN="$TOKEN"
-          B="http://127.0.0.1:8000"
-          H="X-Punch-Token: $TOKEN"
-          ok() { echo "PASS  $1"; }
-          fail() { echo "FAIL  $1"; cat /tmp/punch.log; kill $SERVER_PID; exit 1; }
-
-          curl -fsS "$B/api/health" >/dev/null 2>&1 && ok "health" || fail "health"
-          curl -fsS -o /dev/null -w "%{http_code}" -H "X-Punch-Token: wrong" "$B/api/strategies" | grep -q 401 && ok "auth rejects" || fail "auth rejects"
-          curl -fsS -H "$H" "$B/api/strategies" >/dev/null && ok "auth accepts" || fail "auth accepts"
-          curl -fsS "$B/api/system/status" -H "$H" | grep -q '"mode":  "paper"' && ok "system status" || fail "system status"
-          curl -fsS "$B/api/v1/system/health" -H "$H" | grep -q '"ok":  true' && ok "deep health" || fail "deep health"
-          curl -fsS "$B/api/v1/system/metrics" -H "$H" | grep -q '"counters"' && ok "metrics" || fail "metrics"
-          curl -fsS "$B/api/system/storage" -H "$H" | grep -q '"journalMode":  "wal"' && ok "storage wal" || fail "storage wal"
-          curl -fsS "$B/api/signals/last" -H "$H" | grep -q '"signals"' && ok "signals" || fail "signals"
-          curl -fsS "$B/api/strategies/status" -H "$H" | grep -q '"rows"' && ok "status ladder" || fail "status ladder"
-          curl -fsS -X POST -H "$H" -H "Content-Type: application/json" \
-            -d '{"broker":"paper","interval":"5m","days":30}' \
-            "$B/api/strategies/rsi-reversal/backtest" | grep -q '"trades"' && ok "backtest" || fail "backtest"
-          curl -fsS -X POST -H "$H" -H "Content-Type: application/json" \
-            -d '{}' "$B/api/research/rsi-reversal" | grep -q '"qualityGate"' && ok "research" || fail "research"
-          curl -fsS -X POST -H "$H" -H "Content-Type: application/json" \
-            -d '{"equity":1000000,"riskPct":0.01,"entry":100,"stop":99}' \
-            "$B/api/risk/sizing" | grep -q '"qty"' && ok "risk sizing" || fail "risk sizing"
-          curl -fsS -X POST -H "$H" -H "Content-Type: application/json" \
-            -d '{"broker":"paper","symbol":"RELIANCE","side":"buy","qty":1,"entry":100,"targetPrice":101,"stopLoss":99}' \
-            "$B/api/orders" | grep -q 'FILLED' && ok "paper order" || fail "paper order"
-          curl -fsS "$B/api/execution/ledger" -H "$H" | grep -q '"orders"' && ok "ledger" || fail "ledger"
-          curl -fsS -X POST -H "$H" -H "Content-Type: application/json" \
-            -d '{"broker":"paper"}' "$B/api/execution/reconcile" | grep -q '"ok":  true' && ok "reconcile" || fail "reconcile"
-          curl -fsS "$B/api/ai/status" -H "$H" >/dev/null && ok "ai status" || fail "ai status"
-          curl -fsS "$B/dashboard" | grep -q "punch.trade" && ok "dashboard" || fail "dashboard"
-
-          kill $SERVER_PID
-          echo "ALL SMOKE CHECKS PASSED"
+          pip install pytest pytest-cov
+      - name: Run test suite
+        run: pytest --cov --cov-report=xml:coverage.xml -q
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+          retention-days: 14

@@ -14,12 +14,15 @@ import json
 import os
 import time
 from collections import deque
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import (
     Depends,
     FastAPI,
     Header,
     HTTPException,
+    Query,
     Request,
     Response,
     WebSocket,
@@ -52,7 +55,22 @@ POSITIONS_LOG = os.path.join(DATA_DIR, "positions.json")
 closed_positions: list[dict] = []
 _placed_keys: dict[str, dict] = {}  # idempotency keys ("sig:<id>" / "req:<id>") -> record
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """App lifetime: start the durable stores, ledgers and feed; on exit,
+    stop background tasks and close the SQLite connections."""
+    await _startup()
+    try:
+        yield
+    finally:
+        if feed is not None:
+            feed.stop()
+        db.close_all()
+
+
 app = FastAPI(title="punch.trade", version=APP_VERSION)
+app.router.lifespan_context = lifespan
 
 
 # -------------------------------------------------------------- security --
@@ -298,8 +316,7 @@ class ArmReq(BaseModel):
 _loop: asyncio.AbstractEventLoop | None = None
 
 
-@app.on_event("startup")
-async def startup() -> None:
+async def _startup() -> None:
     global feed, _loop, closed_positions
     os.makedirs(DATA_DIR, exist_ok=True)
     _loop = asyncio.get_running_loop()
@@ -907,9 +924,19 @@ def risk_breaker_reset(_: None = Depends(require_token)) -> dict:
 
 
 @app.get("/api/execution/ledger")
-def execution_ledger(_: None = Depends(require_token)) -> dict:
+def execution_ledger(
+    _: None = Depends(require_token),
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict:
     """Order state machine ledger (PENDING/SUBMITTED/FILLED/REJECTED/UNKNOWN)."""
-    return {"orders": execution.ledger()}
+    orders = execution.ledger()
+    return {
+        "orders": orders[offset : offset + limit],
+        "total": len(orders),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @app.get("/api/execution/trades")
@@ -1196,23 +1223,36 @@ def last_signals(_: None = Depends(require_token)) -> dict:
 
 
 @app.get("/api/signals/history")
-def signal_history(_: None = Depends(require_token)) -> dict:
+def signal_history(
+    _: None = Depends(require_token),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict:
     # Prefer the live in-memory hub: records there carry live AI scores.
     # Fall back to the audit file for a cold start with no hub yet.
     rows = list(hub.signals)
     if not rows and os.path.exists(SIGNALS_LOG):
         with open(SIGNALS_LOG, encoding="utf-8") as f:
             rows = [json.loads(line) for line in f if line.strip()]
-    return {"signals": rows[-100:]}
+    total = len(rows)
+    page = rows[-total + offset :] if offset else rows
+    page = page[-limit:]
+    return {"signals": page, "total": total, "limit": limit, "offset": offset}
 
 
 @app.get("/api/orders/history")
-def order_history(_: None = Depends(require_token)) -> dict:
+def order_history(
+    _: None = Depends(require_token),
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict:
     rows = []
     if os.path.exists(ORDERS_LOG):
         with open(ORDERS_LOG, encoding="utf-8") as f:
             rows = [json.loads(line) for line in f if line.strip()]
-    return {"orders": rows}
+    total = len(rows)
+    page = rows[offset : offset + limit]
+    return {"orders": page, "total": total, "limit": limit, "offset": offset}
 
 
 @app.get("/api/analytics")

@@ -65,6 +65,29 @@ def test_signals_last_schema(client):
 def test_signals_history_schema(client):
     body = client.get("/api/signals/history").json()
     assert isinstance(body["signals"], list)
+    for key in ("total", "limit", "offset"):
+        assert key in body, key
+
+
+def test_signals_history_pagination(client):
+    full = client.get("/api/signals/history").json()
+    page = client.get("/api/signals/history", params={"limit": 1, "offset": 0}).json()
+    assert len(page["signals"]) == min(1, full["total"])
+    assert page["total"] == full["total"]
+
+
+def test_orders_history_schema(client):
+    body = client.get("/api/orders/history").json()
+    assert isinstance(body["orders"], list)
+    for key in ("total", "limit", "offset"):
+        assert key in body, key
+
+
+def test_ledger_pagination_schema(client):
+    body = client.get("/api/execution/ledger").json()
+    assert isinstance(body["orders"], list)
+    for key in ("total", "limit", "offset"):
+        assert key in body, key
 
 
 # ------------------------------------------------------------- orders ----
@@ -97,6 +120,23 @@ def test_error_envelope_schema(client):
     err = r.json()["error"]
     assert err["code"] == "NOT_FOUND"
     assert err["requestId"]
+
+
+def test_method_not_allowed_envelope(client):
+    r = client.get("/api/orders", headers=TOKEN)
+    assert r.status_code == 405
+    err = r.json()["error"]
+    assert err["code"] == "HTTP_405"
+    assert err["requestId"]
+
+
+def test_request_id_correlation(client):
+    rid = "corr-" + uuid.uuid4().hex
+    r = client.get("/api/definitely-not-a-route", headers={**TOKEN, "X-Request-Id": rid})
+    assert r.headers["X-Request-Id"] == rid
+    assert r.json()["error"]["requestId"] == rid
+    ok = client.get("/api/health", headers={**TOKEN, "X-Request-Id": rid})
+    assert ok.headers["X-Request-Id"] == rid
 
 
 def test_reconciliation_schema(client):
