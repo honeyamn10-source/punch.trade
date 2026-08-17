@@ -73,11 +73,15 @@ no cherry-picking), and on-demand backtests per strategy.
 Backtests (real numbers on real data once a broker is connected):
 
 ```powershell
-$t = "punch-demo-token"
-Invoke-RestMethod -Method Post -ContentType "application/json" `
+$h = @{ "X-Punch-Token" = "punch-demo-token" }
+Invoke-RestMethod -Method Post -ContentType "application/json" -Headers $h `
   -Body '{"broker":"paper","interval":"5m","days":30}' `
-  "http://127.0.0.1:8000/api/strategies/rsi-reversal/backtest?token=$t"
+  "http://127.0.0.1:8000/api/strategies/rsi-reversal/backtest"
 ```
+
+Every REST call needs the `X-Punch-Token` header (never a URL query
+string); the WebSocket requires an `{"type":"auth","token":...}` message
+within 5 s of connecting. See `docs/SECURITY.md`.
 
 Tests: `python -m pytest backend/tests -q` (also runs in CI on push).
 
@@ -108,7 +112,12 @@ Tests: `python -m pytest backend/tests -q` (also runs in CI on push).
    brokers), including GTT take-profit/stop-loss legs where supported.
 
 Execution always routes through the selected broker — switch in the popup
-(`paper` / `kite` / `binance` / `openalgo`).
+(`paper` / `kite` / `binance` / `openalgo`). **Every order passes the risk
+gate** (`docs/RISK.md`): modes `research`/`paper`/`live`, explicit arming
+for real brokers (never persisted), signal TTL, idempotency keys, position
+and daily-loss limits, stale-feed detection, emergency stop
+(`POST /api/system/stop`). Real orders require `PUNCH_TOKEN` to be a
+non-default value and LIVE mode + arming.
 
 ## Hosting (free tiers)
 
@@ -140,10 +149,16 @@ Execution always routes through the selected broker — switch in the popup
 | `GET /api/strategies` | strategy list |
 | `GET /api/strategies/leaderboard` | all strategies backtested + ranked (Sharpe, win rate, PF, DD) |
 | `POST /api/strategies/{id}/backtest` | real backtest stats (win rate, drawdown, Sharpe, PF, avg win/loss) |
-| `POST /api/orders` | place bracket (entry+TP+SL) on the chosen broker |
+| `POST /api/orders` | risk-gated, idempotent bracket order (entry+TP+SL) |
 | `GET /api/positions` · `GET /api/fills` | reconciliation / audit |
+| `GET /api/signals/last` · `GET /api/signals/history` | signal feed / audit trail |
+| `GET /api/analytics` | qty-weighted PnL, equity curve, win rate |
+| `GET /api/candles?symbol=&limit=` | live bars for the chart panel |
 | `POST /api/broker/{kite,binance,openalgo}/connect` | broker onboarding |
-| `WS /ws/signals?token=` | live signal feed (snapshot on connect) |
+| `GET /api/system/status` | mode, arming, feed health, uptime |
+| `POST /api/system/mode` · `POST /api/system/arm` · `POST /api/system/stop` | execution gates |
+| `WS /ws/signals` | auth-message handshake → snapshot + live signal/position feed |
 
-All endpoints require `?token=` (default `punch-demo-token`, change in
-`app/config.py`).
+All REST endpoints require the `X-Punch-Token` header (default
+`punch-demo-token`, set `PUNCH_TOKEN` in the environment). Full docs in
+`docs/ARCHITECTURE.md`, `docs/RISK.md`, `docs/SECURITY.md`, `docs/AUDIT.md`.
