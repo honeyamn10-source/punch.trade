@@ -163,15 +163,16 @@
         const card = document.createElement("div");
         card.className = "pt-card";
         const when = new Date(s.ts * 1000).toLocaleTimeString();
+        const expired = s.expiresAt && s.expiresAt < Date.now() / 1000;
         card.innerHTML = `
           <div><span class="sym">${s.symbol}</span><span class="strat">${s.strategyName}</span>
-          <span style="float:right;color:#8b949e;font-size:10px">${when}</span></div>
+          <span style="float:right;color:#8b949e;font-size:10px">${when}${expired ? " · <span style='color:#f85149'>expired</span>" : ""}</span></div>
           <div class="pt-rows">
             <div><div class="k">ENTRY</div><div class="v">${s.entry}</div></div>
             <div><div class="k">TARGETS</div><div class="v">${(s.targets || [s.targetPrice]).map((t) => t).join(" / ")}</div></div>
             <div><div class="k">STOP</div><div class="v">${s.stopLoss}</div></div>
           </div>
-          <button class="pt-punch">PUNCH — ${s.side.toUpperCase()} @ ${s.entry}</button>`;
+          <button class="pt-punch" ${expired ? "disabled" : ""}>${expired ? "SIGNAL EXPIRED" : "PUNCH — " + s.side.toUpperCase() + " @ " + s.entry}</button>`;
         const btn = card.querySelector(".pt-punch");
         btn.addEventListener("click", async () => {
           btn.disabled = true;

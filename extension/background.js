@@ -30,17 +30,22 @@ async function forward(message) {
 
 function connect() {
   getSettings().then(({ server, token }) => {
-    const url = server.replace(/^http/, "ws") + "/ws/signals?token=" + encodeURIComponent(token);
+    const url = server.replace(/^http/, "ws") + "/ws/signals";
     try { ws = new WebSocket(url); } catch (_) { scheduleReconnect(); return; }
 
     ws.onopen = () => {
-      connected = true;
-      retryMs = 1000;
-      forward({ type: "connection", data: { connected: true } });
+      // token travels in the auth message, never in the URL
+      ws.send(JSON.stringify({ type: "auth", token }));
     };
     ws.onmessage = (event) => {
       let msg;
       try { msg = JSON.parse(event.data); } catch (_) { return; }
+      if (msg.type === "auth_ok") {
+        connected = true;
+        retryMs = 1000;
+        forward({ type: "connection", data: { connected: true } });
+        return;
+      }
       forward(msg);
     };
     ws.onclose = () => {
@@ -62,6 +67,8 @@ async function execute(signal, qty) {
   const body = {
     broker,
     strategyId: signal.strategyId || null,
+    signalId: signal.id || null,
+    clientRequestId: crypto.randomUUID(),
     symbol: signal.symbol,
     side: signal.side,
     qty,
@@ -69,33 +76,37 @@ async function execute(signal, qty) {
     targetPrice: signal.targetPrice,
     stopLoss: signal.stopLoss,
   };
-  const res = await fetch(server + "/api/orders?token=" + encodeURIComponent(token), {
+  const res = await fetch(server + "/api/orders", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Punch-Token": token },
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Order rejected (" + res.status + ")");
+  if (!res.ok) {
+    const msg = data.detail && typeof data.detail === "object"
+      ? data.detail.message : (data.detail || "Order rejected (" + res.status + ")");
+    throw new Error(msg);
+  }
   return data;
 }
 
 async function apiGet(path) {
   const { server, token } = await getSettings();
-  const res = await fetch(server + path + "?token=" + encodeURIComponent(token));
+  const res = await fetch(server + path, { headers: { "X-Punch-Token": token } });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Request failed (" + res.status + ")");
+  if (!res.ok) throw new Error(data.detail?.message || data.detail || "Request failed (" + res.status + ")");
   return data;
 }
 
 async function apiPost(path, body) {
   const { server, token } = await getSettings();
-  const res = await fetch(server + path + "?token=" + encodeURIComponent(token), {
+  const res = await fetch(server + path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Punch-Token": token },
     body: JSON.stringify(body || {}),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Request failed (" + res.status + ")");
+  if (!res.ok) throw new Error(data.detail?.message || data.detail || "Request failed (" + res.status + ")");
   return data;
 }
 

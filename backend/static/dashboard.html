@@ -95,6 +95,7 @@
   <button data-tab="positions">Positions</button>
   <button data-tab="orders">Orders</button>
   <button data-tab="brokers">Brokers</button>
+  <button data-tab="system">System</button>
 </nav>
 <main>
 
@@ -193,6 +194,35 @@
     </div>
   </section>
 
+<!-- ============================= SYSTEM ============================ -->
+  <section class="tab" id="tab-system">
+    <div class="grid2">
+      <div class="panel">
+        <h3>Execution mode <span class="muted-note">— gates all orders</span></h3>
+        <div class="bt-row">
+          <select id="modeSelect">
+            <option value="research">research — orders blocked</option>
+            <option value="paper">paper — paper broker only</option>
+            <option value="live">live — requires arming real brokers</option>
+          </select>
+          <button class="btn" id="setModeBtn">Set mode</button>
+          <button class="btn" id="stopBtn" style="background:var(--red)">Emergency stop</button>
+        </div>
+        <div class="msg" id="sysMsg"></div>
+        <div id="modeState" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+      </div>
+      <div class="panel">
+        <h3>Armed brokers <span class="muted-note">— never persisted; restart disarms</span></h3>
+        <div id="armList" class="broker-row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap"></div>
+      </div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="panel">
+      <h3>Feed health</h3>
+      <table id="feedTable"></table>
+    </div>
+  </section>
+
 </main>
 <footer>punch.trade — self-hosted signal platform. Paper broker by default; connect Kite / Binance / OpenAlgo for live execution on your own accounts.</footer>
 
@@ -210,12 +240,12 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const time = (ts) => ts ? new Date(ts * 1000).toLocaleString() : "—";
 
 async function api(path, opts = {}) {
-  const res = await fetch(SERVER + path + "?token=" + encodeURIComponent(token), {
-    headers: { "Content-Type": "application/json" },
+  const res = await fetch(SERVER + path, {
+    headers: { "Content-Type": "application/json", "X-Punch-Token": token },
     ...opts,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || "Request failed (" + res.status + ")");
+  if (!res.ok) throw new Error(data.detail?.message || data.detail || "Request failed (" + res.status + ")");
   return data;
 }
 
@@ -299,8 +329,8 @@ function setChartSymbol(sym) {
 async function loadCandles(sym) {
   if (!candleChart) return;
   try {
-    const res = await fetch(SERVER + "/api/candles?symbol=" + encodeURIComponent(sym) +
-      "&limit=120&token=" + encodeURIComponent(token));
+    const res = await fetch(SERVER + "/api/candles?symbol=" + encodeURIComponent(sym) + "&limit=120",
+      { headers: { "X-Punch-Token": token } });
     const r = await res.json();
     const data = (r.bars || []).map((b) => ({ time: Math.floor(b.ts), open: b.open, high: b.high, low: b.low, close: b.close }));
     candleSeries.setData(data);
@@ -427,11 +457,12 @@ function renderBrokers(status) {
 // ---------------------------------------------------------------- ws ----
 function connectWS() {
   try { if (ws) ws.close(); } catch (_) {}
-  ws = new WebSocket(SERVER.replace(/^http/, "ws") + "/ws/signals?token=" + encodeURIComponent(token));
-  ws.onopen = () => { $("dot").classList.add("on"); $("connText").textContent = "live"; };
+  ws = new WebSocket(SERVER.replace(/^http/, "ws") + "/ws/signals");
+  ws.onopen = () => { ws.send(JSON.stringify({ type: "auth", token })); };
   ws.onclose = () => { $("dot").classList.remove("on"); $("connText").textContent = "reconnecting…"; setTimeout(connectWS, 3000); };
   ws.onmessage = (ev) => {
     let msg; try { msg = JSON.parse(ev.data); } catch (_) { return; }
+    if (msg.type === "auth_ok") { $("dot").classList.add("on"); $("connText").textContent = "live"; return; }
     if (msg.type === "snapshot") {
       latest.signals = msg.data.signals || [];
       renderSignals(latest.signals);
@@ -474,7 +505,6 @@ async function refreshPositions() {
     latest.openPositions = open;
     const a = latest.analytics || (await api("/api/analytics"));
     latest.closedPositions = a.recentCloses;
-    latest.closedPositions = (await api("/api/analytics")).recentCloses;
     renderPositions();
   } catch (_) {}
 }
@@ -482,7 +512,7 @@ async function refreshOrders() {
   try { latest.orders = (await api("/api/orders/history")).orders; renderOrders(); } catch (_) {}
 }
 async function refreshBrokers() {
-  try { renderBrokers(await api("/api/broker/status")); } catch (_) {}
+  try { latestBrokers = await api("/api/broker/status"); renderBrokers(latestBrokers); } catch (_) {}
 }
 async function refreshStrategies() {
   try {
@@ -496,8 +526,50 @@ async function refreshStrategies() {
   } catch (_) {}
 }
 function refreshAll() {
-  refreshAnalytics(); refreshSignals(); refreshPositions(); refreshOrders(); refreshBrokers(); refreshStrategies(); refreshLeaderboard();
+  refreshAnalytics(); refreshSignals(); refreshPositions(); refreshOrders(); refreshBrokers(); refreshStrategies(); refreshLeaderboard(); refreshSystem();
 }
+
+// ------------------------------------------------------------- system --
+async function refreshSystem() {
+  try {
+    const st = await api("/api/system/status");
+    $("modeSelect").value = st.mode;
+    $("modeState").innerHTML = `mode <b>${esc(st.mode)}</b> · armed: <b>${st.armed.length ? esc(st.armed.join(", ")) : "none"}</b> · emergency stop: <b>${st.emergencyStop ? "ACTIVE" : "no"}</b> · uptime ${Math.round(st.uptimeSec)}s · v${esc(st.version)}`;
+    $("armList").innerHTML = (Object.keys(st.feeds || {}).length ? Object.keys(latestBrokers || {}) : []).length
+      ? `<div class="bt-row" style="margin:0;flex-wrap:wrap">${Object.keys(latestBrokers || {}).map((b) => b === "paper" ? "" :
+          `<button class="btn small" data-arm="${esc(b)}" style="${st.armed.includes(b) ? "background:var(--green)" : ""}">${esc(b)}${st.armed.includes(b) ? " · armed" : ""}</button>`).join("")}</div>
+        <div class="muted-note" style="margin-top:6px">Arming only works in LIVE mode. It is never persisted.</div>`
+      : `<div class="muted-note">Connect a real broker in the Brokers tab to enable arming.</div>`;
+    document.querySelectorAll("[data-arm]").forEach((b) => b.onclick = async () => {
+      try {
+        const r = await api("/api/system/arm", { method: "POST", body: JSON.stringify({ broker: b.dataset.arm }) });
+        setMsg($("sysMsg"), `Armed: ${r.armed.join(", ") || "none"}`, true); refreshSystem();
+      } catch (e) { setMsg($("sysMsg"), e.message, false); }
+    });
+    const feeds = st.feeds || [];
+    $("feedTable").innerHTML = feeds.length
+      ? `<tr><th>Symbol</th><th>Source</th><th>Bars</th><th>Last bar age</th><th>State</th><th>Last error</th></tr>` +
+        feeds.map((f) => `<tr>
+          <td>${esc(f.symbol)}</td><td>${esc(f.source)}</td><td>${f.bars}</td>
+          <td>${f.lastBarAgeSec === null ? "—" : f.lastBarAgeSec + "s"}</td>
+          <td>${f.stale ? `<span class="badge loss">STALE</span>` : `<span class="badge open">fresh</span>`}</td>
+          <td>${esc(f.lastError || "—")}</td></tr>`).join("")
+      : `<tr><td colspan="6" class="empty">No feed yet</td></tr>`;
+  } catch (_) {}
+}
+let latestBrokers = {};
+$("setModeBtn").onclick = async () => {
+  try {
+    const r = await api("/api/system/mode", { method: "POST", body: JSON.stringify({ mode: $("modeSelect").value }) });
+    setMsg($("sysMsg"), `Mode set to ${r.mode}`, true); refreshSystem();
+  } catch (e) { setMsg($("sysMsg"), e.message, false); }
+};
+$("stopBtn").onclick = async () => {
+  try {
+    const r = await api("/api/system/stop", { method: "POST" });
+    setMsg($("sysMsg"), "Emergency stop — mode=" + r.mode + ", everything disarmed", true); refreshSystem();
+  } catch (e) { setMsg($("sysMsg"), e.message, false); }
+};
 
 // ---------------------------------------------------------- broker ui --
 $("kiteUrlBtn").onclick = async () => {
