@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config
+from . import db
 from . import risk
 from . import vault
 from .backtest import ExecutionCostConfig, backtest
@@ -181,38 +182,33 @@ async def startup() -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     _loop = asyncio.get_running_loop()
 
-    # seed idempotency keys from the order ledger so a restart cannot
-    # cause a double-execution on retry
-    if os.path.exists(ORDERS_LOG):
-        try:
-            with open(ORDERS_LOG, "r", encoding="utf-8") as f:
-                for line in f:
-                    if not line.strip():
-                        continue
-                    rec = json.loads(line)
-                    if rec.get("signalId"):
-                        _placed_keys.setdefault(f"sig:{rec['signalId']}", rec)
-                    if rec.get("clientRequestId"):
-                        _placed_keys.setdefault(f"req:{rec['clientRequestId']}", rec)
-        except Exception as e:
-            print(f"[startup] order ledger reindex failed: {e}")
+    # ---- durable store: init schema, then one-time legacy import ----
+    db.init_db()
+    import_report = db.import_legacy_all()
+    imported = {name: r["rows"] for name, r in import_report.items()}
+    if any(imported.values()):
+        print(f"[startup] legacy JSONL imported into SQLite: {imported}")
+        for name, r in import_report.items():
+            if r.get("archivedTo"):
+                print(f"[startup] archived {name} -> {os.path.basename(r['archivedTo'])}")
+
+    # seed idempotency keys from the durable order ledger so a restart
+    # cannot cause a double-execution on retry
+    for rec in db.read_orders():
+        if rec.get("signalId"):
+            _placed_keys.setdefault(f"sig:{rec['signalId']}", rec)
+        if rec.get("clientRequestId"):
+            _placed_keys.setdefault(f"req:{rec['clientRequestId']}", rec)
 
     # restore the closed-position ledger for analytics
-    if os.path.exists(POSITIONS_LOG):
-        try:
-            with open(POSITIONS_LOG, "r", encoding="utf-8") as f:
-                closed_positions = [json.loads(line) for line in f if line.strip()]
-        except Exception:
-            closed_positions = []
+    closed_positions = db.read_positions()
 
     # restore the signal ledger so /ws and /api/strategies/leaderboard see it
-    if os.path.exists(SIGNALS_LOG) and not hub.signals:
-        try:
-            with open(SIGNALS_LOG, "r", encoding="utf-8") as f:
-                rows = [json.loads(line) for line in f if line.strip()]
-            hub.signals = deque(rows[-100:], maxlen=50)
-        except Exception:
-            pass
+    if not hub.signals:
+        hub.signals = deque(db.read_signals(100), maxlen=50)
+
+    # restore the execution ledger (orders + closed trades) from SQLite
+    execution.restore()
 
     # restore broker sessions from the encrypted vault
     for broker_name in vault.brokers():
@@ -252,6 +248,7 @@ def on_signal(signal: dict) -> None:
         return
     hub.signals.append(signal)
     _append_json(SIGNALS_LOG, signal)
+    db.write_signal(signal)
     _loop.create_task(hub.broadcast({"type": "signal", "data": signal}))
     if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID:
         _loop.create_task(_telegram_push(signal))
@@ -289,6 +286,7 @@ async def _telegram_push(signal: dict) -> None:
 def on_position_close(position: dict) -> None:
     closed_positions.append(position)
     _append_json(POSITIONS_LOG, position)
+    db.write_position(position)
     _loop.create_task(hub.broadcast({"type": "position", "data": position}))
 
 
@@ -305,6 +303,15 @@ def _append_json(path: str, record: dict) -> None:
 def health() -> dict:
     return {"status": "ok", "brokers": list(brokers.adapters.keys()),
             "connected": [n for n in brokers.adapters if n != "paper"]}
+
+
+@app.get("/api/system/storage")
+def system_storage(_: None = Depends(require_token)) -> dict:
+    """SQLite store info: engine, journal mode, schema, per-table counts."""
+    try:
+        return db.storage_status()
+    except Exception as e:  # noqa: BLE001 — storage must never 500 the status page
+        return {"engine": "sqlite", "error": str(e)}
 
 
 @app.get("/api/strategies")
@@ -419,6 +426,7 @@ def run_research(strategy_id: str, req: ResearchReq,
         report = research_report(strategy, bars, cfg)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    db.write_research_run(strategy_id, report)
     return {"source": req.broker, **report}
 
 
@@ -451,6 +459,8 @@ def strategy_statuses(_: None = Depends(require_token)) -> dict:
     result = {"ts": now, "rows": rows}
     _status_cache.clear()
     _status_cache.update(result)
+    for r in rows:
+        db.write_strategy_status(r["id"], {"ts": now, **r})
     return result
 
 
@@ -683,6 +693,11 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
         symbol=req.symbol, side=req.side, qty=req.qty, entry=req.entry,
         broker=req.broker, client_request_id=req.clientRequestId)
     execution.mark(order_id, "FILLED" if req.broker == "paper" else "SUBMITTED")
+
+    # durable mirror of the execution ledger record
+    led_rec = execution.get_order(order_id)
+    if led_rec:
+        db.write_order(led_rec)
 
     if req.signalId:
         _update_signal(req.signalId, status="EXECUTED")

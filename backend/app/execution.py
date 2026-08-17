@@ -25,6 +25,7 @@ import time
 from typing import Dict, List, Optional
 
 from . import config
+from . import db
 from . import pnl as pnl_mod
 from . import risk
 from .trades import CompletedTrade
@@ -74,6 +75,23 @@ def _load_trades() -> None:
         pass
 
 
+def restore() -> None:
+    """Populate the in-memory ledger + trades from the SQLite store.
+
+    Called at startup (after db.import_legacy_all), so a restart keeps
+    the full execution state even after the JSONL files were archived.
+    """
+    orders = db.read_orders()
+    for rec in orders:
+        _ledger[rec.get("id") or rec.get("orderId") or rec.get("signalId")] = rec
+    trades = db.read_trades()
+    if trades:
+        _trades.clear()
+        _trades.extend(trades)
+    elif os.path.exists(TRADES_LOG):
+        _load_trades()
+
+
 def json_loads_lines(f) -> List[dict]:
     import json
     return [json.loads(line) for line in f if line.strip()]
@@ -94,6 +112,7 @@ def record_order(order_id: str, *, signal_id: Optional[str],
         "ts": time.time(), "updatedTs": time.time(),
     }
     _ledger[order_id] = rec
+    db.write_order(rec)
     return rec
 
 
@@ -105,6 +124,7 @@ def mark(order_id: str, new_status: str) -> Optional[dict]:
     transition(rec["status"], new_status)
     rec["status"] = new_status
     rec["updatedTs"] = time.time()
+    db.write_order(rec)
     return rec
 
 
@@ -126,6 +146,7 @@ def stale_unknown_orders(now: Optional[float] = None,
                 and now - rec["updatedTs"] > timeout):
             rec["status"] = UNKNOWN
             rec["updatedTs"] = now
+            db.write_order(rec)
             out.append(rec)
     return out
 
@@ -165,6 +186,7 @@ def record_closed_trade(position_id: str, events: List[dict]) -> Optional[dict]:
     with open(TRADES_LOG, "a", encoding="utf-8") as f:
         import json
         f.write(json.dumps(d) + "\n")
+    db.write_trade(d)
     risk.record_trade_result(win=d["netPnl"] > 0)
     return d
 

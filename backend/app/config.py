@@ -2,6 +2,13 @@
 
 import os
 
+DATA_DIR = os.path.abspath(os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data"))
+
+# SQLite durable store (never committed to git; data/ is gitignored).
+DB_PATH = os.environ.get("PUNCH_DB_PATH",
+                         os.path.join(DATA_DIR, "punch.db"))
+
 HOST = "127.0.0.1"
 PORT = 8000
 
