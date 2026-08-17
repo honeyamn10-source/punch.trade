@@ -3,12 +3,14 @@ gate, one-position-one-trade booking from paper close events."""
 
 from __future__ import annotations
 
+import json
+import os
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app import api, execution, risk
+from app import api, config, db, execution, risk
 from app.execution import (
     OrderStateError,
     closed_trades,
@@ -251,3 +253,46 @@ def test_closed_trade_feeds_breaker():
     ]
     record_closed_trade("p3", events)
     assert risk.consecutive_losses() == 1
+
+
+# ------------------------------------------- legacy audit-row restore ----
+class _NoPositionsAdapter:
+    def get_positions(self):
+        return []
+
+
+def test_restore_and_reconcile_with_legacy_audit_rows(tmp_path, monkeypatch):
+    """Legacy JSONL audit rows (no id/status keys) must survive the DB
+    round-trip and reconcile without a KeyError."""
+    orders_path = os.path.join(config.DATA_DIR, "orders.json")
+    with open(orders_path, "w", encoding="utf-8") as f:
+        f.write(
+            json.dumps(
+                {
+                    "ts": 1000.0,
+                    "broker": "paper",
+                    "strategyId": "legacy",
+                    "signalId": "sig-legacy",
+                    "clientRequestId": "req-legacy",
+                    "symbol": "X",
+                    "side": "buy",
+                    "qty": 5,
+                    "entry": 100.0,
+                    "target": 101.0,
+                    "stop": 99.0,
+                    "mode": "paper",
+                    "result": {"orderId": "legacy-order-1", "status": "FILLED"},
+                }
+            )
+            + "\n"
+        )
+    db.import_legacy_all()
+    execution.restore()
+    rec = execution.get_order("legacy-order-1")
+    assert rec is not None
+    assert rec["status"] == "UNKNOWN"  # audit rows have no ledger state
+    rep = reconcile("paper", _NoPositionsAdapter())
+    assert rep["ok"] is False
+    assert any(
+        m["type"] == "UNKNOWN_ORDER" and "legacy-order-1" in m["detail"] for m in rep["mismatches"]
+    )

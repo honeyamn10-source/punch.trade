@@ -80,7 +80,9 @@ def restore() -> None:
     orders = db.read_orders()
     for rec in orders:
         rec.setdefault("status", UNKNOWN)  # legacy audit rows have no status
-        _ledger[rec.get("id") or rec.get("orderId") or rec.get("signalId")] = rec
+        result = rec.get("result") or {}
+        rec.setdefault("id", rec.get("orderId") or result.get("orderId") or rec.get("signalId"))
+        _ledger[rec["id"]] = rec
     trades = db.read_trades()
     if trades:
         _trades.clear()
