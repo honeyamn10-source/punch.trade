@@ -16,12 +16,14 @@ from collections import deque
 from typing import Dict, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config
 from . import db
+from . import obs
 from . import risk
 from . import security
 from . import vault
@@ -51,16 +53,69 @@ app = FastAPI(title="punch.trade", version="0.2.0")
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
     """Rate-limit API traffic per client IP + security headers on all responses."""
+    request_id = request.headers.get("X-Request-Id") or obs.new_request_id()
+    request.state.request_id = request_id
+    started = time.time()
     if request.url.path.startswith("/api") and request.url.path != "/api/health":
         try:
             security.rate_limit_api(request)
         except HTTPException as e:
+            obs.error_incr(e.status_code)
+            obs.log_request(request_id, request.method, request.url.path,
+                            e.status_code, (time.time() - started) * 1000)
             return JSONResponse(status_code=e.status_code,
-                                content={"detail": e.detail},
-                                headers=e.headers or {})
+                                content=_error_envelope(e, request_id),
+                                headers={**(e.headers or {}), "X-Request-Id": request_id})
     response = await call_next(request)
+    obs.incr("requests")
+    if response.status_code >= 400:
+        obs.error_incr(response.status_code)
+    obs.log_request(request_id, request.method, request.url.path,
+                    response.status_code, (time.time() - started) * 1000)
+    response.headers["X-Request-Id"] = request_id
     security.apply_security_headers(response)
     return response
+
+
+# ------------------------------------------------------------- errors ----
+def _error_envelope(exc: HTTPException, request_id: str) -> dict:
+    """{error:{code,message,request_id}} — keeps typed {code,message} details."""
+    detail = exc.detail
+    if isinstance(detail, dict) and "code" in detail:
+        extra = {k: v for k, v in detail.items() if k not in ("code", "message")}
+        return {"error": {"code": detail["code"],
+                          "message": detail.get("message", str(detail)),
+                          "requestId": request_id, **extra}}
+    if isinstance(detail, str) and detail:
+        code = {400: "BAD_REQUEST", 401: "UNAUTHORIZED", 403: "FORBIDDEN",
+                404: "NOT_FOUND", 409: "CONFLICT", 422: "UNPROCESSABLE_ENTITY",
+                429: "RATE_LIMITED", 502: "BAD_GATEWAY",
+                503: "SERVICE_UNAVAILABLE"}.get(exc.status_code,
+                                                f"HTTP_{exc.status_code}")
+        message = detail
+    else:
+        code = f"HTTP_{exc.status_code}"
+        message = str(detail or "")
+    return {"error": {"code": code, "message": message,
+                      "requestId": request_id}}
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code,
+                        content=_error_envelope(exc, request.state.request_id),
+                        headers=exc.headers or {})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    obs.error_incr(422)
+    return JSONResponse(status_code=422,
+                        content={"error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": str(exc.errors()[0].get("msg", "invalid input"))
+                                       if exc.errors() else "invalid input",
+                            "requestId": request.state.request_id}})
 
 # ---------------------------------------------------------------- auth --
 def _check_token(token: str) -> bool:
@@ -316,6 +371,138 @@ def _append_json(path: str, record: dict) -> None:
 
 
 # ------------------------------------------------------------- REST -----
+@app.get("/api/v1/system/health")
+def v1_health(_: None = Depends(require_token)) -> dict:
+    """Deep health: db, feed, brokers, uptime — one cheap round-trip."""
+    feed_ok = True
+    stale = []
+    bars = 0
+    if feed is not None:
+        for h in feed.health():
+            bars += h.get("bars", 0)
+            if h.get("stale"):
+                feed_ok = False
+                stale.append(h["symbol"])
+    try:
+        db_path_ok = bool(db.storage_status().get("path"))
+        db_error = None
+    except Exception as e:  # noqa: BLE001
+        db_path_ok, db_error = False, str(e)[:200]
+    return {
+        "status": "ok" if (feed_ok and db_path_ok) else "degraded",
+        "version": app.version,
+        "uptimeSec": round(obs.uptime(), 1),
+        "db": {"ok": db_path_ok, "error": db_error},
+        "feed": {"ok": feed_ok, "staleSymbols": stale,
+                 "symbols": len(feed.symbols()) if feed else 0,
+                 "bars": bars},
+        "brokers": {"connected": [n for n in brokers.adapters if n != "paper"],
+                    "mode": risk.mode()},
+    }
+
+
+@app.get("/api/v1/system/metrics")
+def v1_metrics(_: None = Depends(require_token)) -> dict:
+    """Operational counters: requests, errors, signals, orders, trades."""
+    ledger_orders = execution.ledger()
+    filled = len([o for o in ledger_orders
+                  if o.get("status") == execution.FILLED])
+    rejected = len([o for o in ledger_orders
+                    if o.get("status") == execution.REJECTED])
+    open_ledger = len([o for o in ledger_orders
+                       if o.get("status") == execution.FILLED])
+    return {
+        "ts": time.time(),
+        "uptimeSec": round(obs.uptime(), 1),
+        "counters": obs.counters(),
+        "errorBuckets": obs.errors(),
+        "signals": {"live": len(hub.signals), "stored": db.row_count("signals")},
+        "orders": {"ledger": len(ledger_orders), "filled": filled,
+                   "rejected": rejected, "open": open_ledger},
+        "trades": {"closed": len(execution.closed_trades()),
+                   "stored": db.row_count("trades")},
+        "risk": {"breakerOpen": risk.breaker_open(),
+                 "consecutiveLosses": risk.consecutive_losses(),
+                 "reconciliationOk": risk.reconciliation_ok(),
+                 "armed": risk.armed()},
+    }
+
+
+# ------------------------------------------------------------- API v1 ----
+# versioned alias surface for the stable read/action endpoints; error
+# envelope {error:{code,message,requestId}} is uniform across /api and /api/v1
+@app.get("/api/v1/strategies")
+def v1_strategies(_: None = Depends(require_token)) -> dict:
+    return {"strategies": STRATEGIES}
+
+
+@app.get("/api/v1/signals/last")
+def v1_signals_last(_: None = Depends(require_token)) -> dict:
+    return {"signals": list(hub.signals)}
+
+
+@app.get("/api/v1/risk/state")
+def v1_risk_state(_: None = Depends(require_token)) -> dict:
+    return risk_state()
+
+
+@app.get("/api/v1/execution/trades")
+def v1_execution_trades(_: None = Depends(require_token)) -> dict:
+    return {"trades": execution.closed_trades()}
+
+
+@app.get("/api/v1/system/storage")
+def v1_system_storage(_: None = Depends(require_token)) -> dict:
+    return system_storage()
+
+
+@app.get("/api/v1/system/status")
+def v1_system_status(_: None = Depends(require_token)) -> dict:
+    return system_status()
+
+
+@app.get("/api/v1/strategies/status")
+def v1_strategy_statuses(_: None = Depends(require_token)) -> dict:
+    return strategy_statuses()
+
+
+@app.get("/api/v1/strategies/leaderboard")
+def v1_leaderboard(_: None = Depends(require_token)) -> dict:
+    return strategy_leaderboard()
+
+
+@app.get("/api/v1/ai/status")
+def v1_ai_status(_: None = Depends(require_token)) -> dict:
+    return ai_status()
+
+
+@app.post("/api/v1/ai/analyze/{strategy_id}")
+def v1_ai_analyze(strategy_id: str, _: None = Depends(require_token)) -> dict:
+    return ai_analyze(strategy_id)
+
+
+@app.post("/api/v1/orders")
+async def v1_place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
+    return await place_order(req)
+
+
+@app.post("/api/v1/backtest/{strategy_id}")
+def v1_backtest(strategy_id: str, req: BacktestReq,
+                _: None = Depends(require_token)) -> dict:
+    return run_backtest(strategy_id, req)
+
+
+@app.post("/api/v1/research/{strategy_id}")
+def v1_run_research(strategy_id: str, req: ResearchReq,
+                    _: None = Depends(require_token)) -> dict:
+    return run_research(strategy_id, req)
+
+
+@app.post("/api/v1/execution/reconcile")
+def v1_execution_reconcile(req: BrokerReq, _: None = Depends(require_token)) -> dict:
+    return execution_reconcile(req)
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok", "brokers": list(brokers.adapters.keys()),

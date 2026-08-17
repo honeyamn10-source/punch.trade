@@ -1,4 +1,4 @@
-"""Security layer tests: sessions, CSRF, rate limits, sanitizer, headers."""
+﻿"""Security layer tests: sessions, CSRF, rate limits, sanitizer, headers."""
 
 import time
 
@@ -88,7 +88,7 @@ def test_login_rate_limited_after_five_attempts():
     r = client.post("/api/system/login",
                     headers={"X-Punch-Token": config.API_TOKEN})
     assert r.status_code == 429
-    assert "retryAfter" in r.json()["detail"]
+    assert "retryAfter" in r.json()["error"]
 
 
 def test_api_rate_limit_with_small_window(monkeypatch):

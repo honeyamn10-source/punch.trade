@@ -1,4 +1,4 @@
-"""Safety tests: risk engine, execution modes, order hardening, auth.
+﻿"""Safety tests: risk engine, execution modes, order hardening, auth.
 
 Covers AUD-001/002/003/004/005/007/008 from docs/AUDIT.md.
 """
@@ -188,7 +188,7 @@ def test_order_idempotency_by_signal_id(client):
 def test_unknown_signal_rejected(client):
     r = _place(client, signalId="does-not-exist")
     assert r.status_code == 409
-    assert r.json()["detail"]["code"] == "SIGNAL_NOT_FOUND"
+    assert r.json()["error"]["code"] == "SIGNAL_NOT_FOUND"
 
 
 def test_expired_signal_rejected(client):
@@ -198,7 +198,7 @@ def test_expired_signal_rejected(client):
     api.hub.signals.append(sig)
     r = _place(client, signalId=sig["id"])
     assert r.status_code == 409
-    assert r.json()["detail"]["code"] == "SIGNAL_EXPIRED"
+    assert r.json()["error"]["code"] == "SIGNAL_EXPIRED"
 
 
 def test_invalid_qty_rejected(client):
@@ -210,7 +210,7 @@ def test_research_mode_blocks_orders(client):
     client.post("/api/system/mode", json={"mode": "research"})
     r = _place(client)
     assert r.status_code == 409
-    assert r.json()["detail"]["code"] == "MODE_BLOCKED"
+    assert r.json()["error"]["code"] == "MODE_BLOCKED"
     client.post("/api/system/mode", json={"mode": "paper"})
 
 
@@ -218,7 +218,7 @@ def test_emergency_stop_endpoint(client):
     client.post("/api/system/stop")
     r = _place(client)
     assert r.status_code == 409
-    assert r.json()["detail"]["code"] == "MODE_BLOCKED"
+    assert r.json()["error"]["code"] == "MODE_BLOCKED"
     client.post("/api/system/mode", json={"mode": "paper"})
 
 
