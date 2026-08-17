@@ -28,6 +28,7 @@ class CCXTBroker(BrokerAdapter):
         if ccxt is None:
             raise BrokerError("ccxt not installed. pip install ccxt") from None
         self.testnet = testnet
+        self.public = not (api_key or api_secret)
         params: dict = {
             "enableRateLimit": True,
             "options": {"defaultType": "spot"},
@@ -45,6 +46,14 @@ class CCXTBroker(BrokerAdapter):
 
     # ---- BrokerAdapter --------------------------------------------------
     def status(self) -> dict:
+        if self.public:
+            return {
+                "broker": "binance",
+                "connected": True,
+                "testnet": False,
+                "account": "public market data (read-only)",
+                "usdt": None,
+            }
         try:
             balance = self._ex.fetch_balance()
             return {

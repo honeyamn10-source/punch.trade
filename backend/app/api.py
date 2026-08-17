@@ -377,8 +377,20 @@ async def _startup() -> None:
         f"mode={risk.mode()} — real orders require LIVE mode + explicit arming"
     )
 
+    # Real market data feed: PUNCH_REAL_FEED=1 points the feed at Binance
+    # public OHLCV (no account needed; orders still go to the paper broker
+    # unless the operator arms a real one). Default stays the synthetic
+    # paper feed.
+    real_feed = os.environ.get("PUNCH_REAL_FEED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if real_feed and "binance" not in brokers.adapters:
+        brokers.adapters["binance"] = CCXTBroker("", "")
+
     feed = LiveFeed(
-        brokers.adapters["paper"],
+        brokers.adapters["binance"] if real_feed else brokers.adapters["paper"],
         build_runners(),
         on_signal=on_signal,
         on_position_close=on_position_close,

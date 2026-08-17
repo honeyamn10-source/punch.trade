@@ -52,6 +52,10 @@ On a release bump it too: `pyproject.toml [project] version` and
   (`db.import_legacy_all`) — it's a one-time migration; a server run touches
   the real `data/` dir.
 - Only one backend instance may run (SQLite lock).
+- `PUNCH_REAL_FEED=1` points the feed at Binance public OHLCV (keyless; the
+  NSE-named strategies then error per-symbol — use the BTC/USDT strategies).
+  Orders still hit paper unless a real broker is armed; feed stays synthetic
+  by default.
 - `PUNCH_MODE=live` refuses the default demo token; `PUNCH_ALLOW_LIVE_TESTS`
   is a tripwire for real-broker integration tests and must stay off in CI.
 - All errors use `{error:{code,message,requestId}}`; responses carry
