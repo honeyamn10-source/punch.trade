@@ -12,7 +12,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; }
-  header { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
   .logo { font-weight: 800; font-size: 18px; letter-spacing: .5px; }
   .logo span { color: var(--accent); }
   .conn { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
@@ -20,599 +20,502 @@
   .conn .dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
   .spacer { flex: 1; }
   .token-box { display: flex; gap: 6px; align-items: center; }
-  .token-box input { width: 180px; padding: 6px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
-  nav { display: flex; gap: 4px; padding: 0 24px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .token-box input { width: 200px; padding: 6px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { background: transparent; border-color: var(--red); color: var(--red); }
+  nav { display: flex; gap: 4px; padding: 0 24px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   nav button { padding: 10px 16px; background: none; border: 0; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; }
   nav button.active { color: var(--text); border-bottom-color: var(--accent); }
-  main { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+  main { padding: 20px 24px; max-width: 1280px; margin: 0 auto; }
   section.tab { display: none; }
   section.tab.active { display: block; }
   h2 { font-size: 16px; margin-bottom: 14px; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 18px 0 10px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
   .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
   .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-  .stat .value { font-size: 24px; font-weight: 700; margin-top: 4px; font-family: ui-monospace, monospace; }
-  .pos { color: var(--green); } .neg { color: var(--red); }
+  .stat .value { font-size: 22px; font-weight: 700; margin-top: 4px; font-family: ui-monospace, monospace; }
+  .pos { color: var(--green); } .neg { color: var(--red); } .warn { color: var(--yellow); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
-  .chart-tabs { display: flex; gap: 6px; margin: 8px 0 12px; flex-wrap: wrap; }
-  .chart-tabs button { background: #161b22; border: 1px solid #30363d; color: var(--muted); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-  .chart-tabs button.active { background: rgba(31,111,235,.2); border-color: #1f6feb; color: #79c0ff; }
-  #candleChart { height: 340px; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-  .panel h3 { font-size: 13px; margin-bottom: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  td { padding: 8px; border-bottom: 1px solid #21262d; font-family: ui-monospace, monospace; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 12.5px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  tr:last-child td { border-bottom: 0; }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .chip.ok { background: rgba(63,185,80,.15); color: var(--green); }
+  .chip.bad { background: rgba(248,81,73,.15); color: var(--red); }
+  .chip.warn { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .chip.mut { background: rgba(139,148,158,.15); color: var(--muted); }
   .mono { font-family: ui-monospace, monospace; }
-  .strat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-  .strat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-  .strat-card .name { font-weight: 700; font-size: 14px; }
-  .strat-card .sym { color: var(--accent); font-size: 12px; }
-  .strat-card .desc { color: var(--muted); font-size: 12px; margin: 6px 0 10px; }
-  .stat-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-top: 1px solid #21262d; }
-  .stat-row .k { color: var(--muted); }
-  .btn { padding: 6px 12px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font-weight: 600; font-size: 12px; cursor: pointer; }
-  .btn.small { padding: 4px 10px; font-size: 11px; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  select, input { padding: 6px 8px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
-  .bt-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-  .badge.open { background: rgba(63,185,80,.15); color: var(--green); }
-  .badge.closed { background: rgba(139,148,158,.15); color: var(--muted); }
-  .badge.win { background: rgba(63,185,80,.15); color: var(--green); }
-  .badge.loss { background: rgba(248,81,73,.15); color: var(--red); }
-  .badge.signal { background: rgba(31,111,235,.2); color: #79c0ff; }
-  .muted-note { color: var(--muted); font-size: 11px; font-weight: 400; }
-  .tp-lv { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(63,185,80,.12); color: var(--green); font-size: 11px; }
-  #equityChart { width: 100%; height: 240px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
-  .msg { margin-top: 8px; font-size: 12px; min-height: 16px; }
-  .msg.ok { color: var(--green); } .msg.err { color: var(--red); }
-  .flash { animation: flash 1.5s ease-out; }
-  @keyframes flash { 0% { background: rgba(63,185,80,.25); } 100% { background: transparent; } }
-  .empty { color: var(--muted); text-align: center; padding: 24px; font-size: 13px; }
-  .broker-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #21262d; }
-  details { margin-top: 10px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-  .form-grid label { grid-column: 1 / -1; font-size: 11px; color: var(--muted); margin-bottom: -6px; }
-  footer { padding: 20px 24px; color: var(--muted); font-size: 11px; text-align: center; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .panel .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); }
+  .err { color: var(--red); font-size: 12px; }
+  .ok-msg { color: var(--green); font-size: 12px; }
+  .analysis { white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+  select, input[type=number] { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+  .loading { color: var(--muted); font-size: 12px; }
 </style>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <header>
   <div class="logo">punch<span>.trade</span></div>
-  <div class="conn"><span class="dot" id="dot"></span><span id="connText">connecting…</span></div>
+  <div class="conn"><span class="dot" id="connDot"></span><span id="connText">disconnected</span></div>
   <div class="spacer"></div>
   <div class="token-box">
-    <input id="token" placeholder="punch-demo-token" title="API token">
-    <button class="btn small" id="saveToken">Save</button>
+    <input id="tokenInput" type="password" placeholder="API token" autocomplete="off">
+    <button id="saveToken" class="primary">Save</button>
+    <button id="btnLogin">Session login</button>
+    <button id="btnLogout" title="revoke dashboard session">Logout</button>
   </div>
 </header>
 <nav>
-  <button data-tab="overview" class="active">Overview</button>
-  <button data-tab="strategies">Strategies</button>
+  <button data-tab="signals" class="active">Signals</button>
   <button data-tab="positions">Positions</button>
-  <button data-tab="orders">Orders</button>
-  <button data-tab="brokers">Brokers</button>
+  <button data-tab="execution">Execution</button>
+  <button data-tab="research">Research + AI</button>
+  <button data-tab="risk">Risk</button>
+  <button data-tab="strategies">Strategies</button>
   <button data-tab="system">System</button>
 </nav>
 <main>
 
-  <!-- ============================ OVERVIEW ============================ -->
-  <section class="tab active" id="tab-overview">
-    <div class="stats" id="statCards"></div>
-    <div class="grid2">
-      <div class="panel">
-        <h3>Equity curve (closed positions, cumulative PnL %)</h3>
-        <canvas id="equityChart"></canvas>
-      </div>
-      <div class="panel">
-        <h3>Recent closed trades</h3>
-        <table id="recentCloses"></table>
-      </div>
-    </div>
-    <div style="height:16px"></div>
-    <div class="panel">
-      <h3>Market <span id="chartSymLabel" class="muted-note"></span></h3>
-      <div class="chart-tabs" id="chartTabs"></div>
-      <div id="candleChart"></div>
-    </div>
-    <div style="height:16px"></div>
-    <div class="panel">
-      <h3>Latest signals</h3>
-      <table id="signalTable"></table>
-    </div>
-    <div style="height:16px"></div>
-    <div class="panel">
-      <h3>Strategy leaderboard <span class="muted-note">— backtest vs paper feed, 30 days, refreshed hourly. Stats are per-trade, fractional-fill inclusive, and include every losing exit. No cherry-picking.</span></h3>
-      <table id="leaderboardTable"></table>
-    </div>
-  </section>
+<section class="tab active" id="tab-signals">
+  <div class="stats" id="signalStats"></div>
+  <h3>Live signal stream (WS)</h3>
+  <table>
+    <thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Entry</th><th>TP</th><th>SL</th><th>Strategy</th><th>Status</th><th>Age</th><th></th></tr></thead>
+    <tbody id="signalRows"></tbody>
+  </table>
+</section>
 
-  <!-- =========================== STRATEGIES ========================== -->
-  <section class="tab" id="tab-strategies">
-    <div class="strat-grid" id="stratGrid"></div>
-  </section>
+<section class="tab" id="tab-positions">
+  <h3>Open positions (paper)</h3>
+  <table>
+    <thead><tr><th>Id</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Opened</th></tr></thead>
+    <tbody id="positionRows"></tbody>
+  </table>
+  <h3>Recent fills</h3>
+  <table>
+    <thead><tr><th>Ts</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Exit</th></tr></thead>
+    <tbody id="fillRows"></tbody>
+  </table>
+</section>
 
-  <!-- ============================ POSITIONS ========================== -->
-  <section class="tab" id="tab-positions">
-    <div class="panel" style="margin-bottom:16px">
-      <h3>Open positions</h3>
-      <table id="openPosTable"></table>
+<section class="tab" id="tab-execution">
+  <div class="panel row">
+    <button id="btnReconcile" class="primary">Reconcile (paper)</button>
+    <span class="muted" id="reconcileState">reconciliation state unknown</span>
+  </div>
+  <h3>Order ledger</h3>
+  <table>
+    <thead><tr><th>Order</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Broker</th><th>Status</th><th>Signal</th><th>Updated</th></tr></thead>
+    <tbody id="ledgerRows"></tbody>
+  </table>
+  <h3>Closed trades (one position = one trade)</h3>
+  <table>
+    <thead><tr><th>Id</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Net PnL</th><th>Net %</th><th>Exit</th><th>Strategy</th></tr></thead>
+    <tbody id="tradeRows"></tbody>
+  </table>
+</section>
+
+<section class="tab" id="tab-research">
+  <div class="panel row">
+    <select id="strategyPick"></select>
+    <button id="btnResearch" class="primary">Run research</button>
+    <button id="btnAi" title="local qwen2.5 analyst (offline-safe)">AI analyze</button>
+    <span class="loading" id="researchLoading"></span>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Quality gate</h3>
+      <div id="researchGate" class="muted">run research to populate</div>
+      <h3>Metrics</h3>
+      <div id="researchMetrics" class="muted">—</div>
     </div>
     <div class="panel">
-      <h3>Closed positions (ledger)</h3>
-      <table id="closedPosTable"></table>
+      <h3>Walk-forward &amp; bootstrap</h3>
+      <div id="researchWf" class="muted">—</div>
+      <h3>Regime performance</h3>
+      <div id="researchRegime" class="muted">—</div>
     </div>
-  </section>
+  </div>
+  <div class="panel">
+    <h3>AI assessment <span class="muted" id="aiMeta"></span></h3>
+    <div class="analysis" id="aiOutput" class="muted">local qwen analyst — press “AI analyze” (model auto-detected, never downloaded)</div>
+  </div>
+</section>
 
-  <!-- ============================= ORDERS ============================ -->
-  <section class="tab" id="tab-orders">
+<section class="tab" id="tab-risk">
+  <div class="stats" id="riskStats"></div>
+  <div class="panel">
+    <h3>Position sizing (fixed-fractional)</h3>
+    <div class="row">
+      Equity <input id="sizeEquity" type="number" value="1000000" step="10000">
+      Entry <input id="sizeEntry" type="number" value="100">
+      Stop <input id="sizeStop" type="number" value="99">
+      Risk % <input id="sizeRisk" type="number" value="1" step="0.1">
+      <button id="btnSize">Size</button>
+    </div>
+    <div id="sizeOut" class="muted"></div>
+  </div>
+  <div class="panel row">
+    <button id="btnBreakerReset" class="danger">Reset circuit breaker</button>
+    <span class="muted">manual reset is the only way to re-arm after 3 consecutive losses</span>
+  </div>
+</section>
+
+<section class="tab" id="tab-strategies">
+  <h3>Lifecycle status (DRAFT → BACKTESTED → RESEARCHED → LIVE)</h3>
+  <table>
+    <thead><tr><th>Strategy</th><th>Symbol</th><th>Status</th><th>Score</th><th>Reason</th><th>Can promote to</th></tr></thead>
+    <tbody id="statusRows"></tbody>
+  </table>
+  <h3>Leaderboard (honest backtest metrics)</h3>
+  <table>
+    <thead><tr><th>#</th><th>Strategy</th><th>Symbol</th><th>Win rate</th><th>Net %</th><th>Max DD %</th><th>Sharpe</th><th>PF</th><th>Trades</th></tr></thead>
+    <tbody id="leaderboardRows"></tbody>
+  </table>
+</section>
+
+<section class="tab" id="tab-system">
+  <div class="grid2">
     <div class="panel">
-      <h3>Order audit log</h3>
-      <table id="orderTable"></table>
+      <h3>Storage (SQLite)</h3>
+      <div id="storageInfo" class="muted">—</div>
     </div>
-  </section>
-
-  <!-- ============================ BROKERS ============================ -->
-  <section class="tab" id="tab-brokers">
     <div class="panel">
-      <h3>Broker connections</h3>
-      <div id="brokerList"></div>
-      <details>
-        <summary>Connect a real broker</summary>
-        <div class="form-grid">
-          <label>Zerodha Kite — API key</label>
-          <input id="kiteKey" placeholder="from developers.zerodha.com"><span></span>
-          <label>Request token (from redirect URL)</label>
-          <input id="kiteToken">
-          <label>API secret</label>
-          <input id="kiteSecret">
-          <button class="btn" id="kiteUrlBtn">Get login URL</button>
-          <button class="btn" id="kiteConnectBtn">Connect Kite</button>
-          <div class="msg" id="kiteMsg" style="grid-column:1/-1"></div>
-
-          <label>Binance — API key</label>
-          <input id="bnKey">
-          <label>Binance — API secret</label>
-          <input id="bnSecret">
-          <label style="grid-column:1/-1"><input type="checkbox" id="bnTestnet" checked> testnet (fake money)</label>
-          <button class="btn" id="bnConnectBtn" style="grid-column:1/-1">Connect Binance</button>
-          <div class="msg" id="bnMsg" style="grid-column:1/-1"></div>
-
-          <label>OpenAlgo — host</label>
-          <input id="oaHost" placeholder="http://127.0.0.1:5000">
-          <label>OpenAlgo — API key</label>
-          <input id="oaKey">
-          <label>OpenAlgo — broker</label>
-          <input id="oaBroker" placeholder="zerodha">
-          <button class="btn" id="oaConnectBtn" style="grid-column:1/-1">Connect OpenAlgo</button>
-          <div class="msg" id="oaMsg" style="grid-column:1/-1"></div>
-        </div>
-      </details>
+      <h3>Operational metrics</h3>
+      <div id="metricInfo" class="muted">—</div>
     </div>
-  </section>
-
-<!-- ============================= SYSTEM ============================ -->
-  <section class="tab" id="tab-system">
-    <div class="grid2">
-      <div class="panel">
-        <h3>Execution mode <span class="muted-note">— gates all orders</span></h3>
-        <div class="bt-row">
-          <select id="modeSelect">
-            <option value="research">research — orders blocked</option>
-            <option value="paper">paper — paper broker only</option>
-            <option value="live">live — requires arming real brokers</option>
-          </select>
-          <button class="btn" id="setModeBtn">Set mode</button>
-          <button class="btn" id="stopBtn" style="background:var(--red)">Emergency stop</button>
-        </div>
-        <div class="msg" id="sysMsg"></div>
-        <div id="modeState" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
-      </div>
-      <div class="panel">
-        <h3>Armed brokers <span class="muted-note">— never persisted; restart disarms</span></h3>
-        <div id="armList" class="broker-row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap"></div>
-      </div>
-    </div>
-    <div style="height:16px"></div>
-    <div class="panel">
-      <h3>Feed health</h3>
-      <table id="feedTable"></table>
-    </div>
-  </section>
+  </div>
+  <div class="panel">
+    <h3>Feed health</h3>
+    <table>
+      <thead><tr><th>Symbol</th><th>Source</th><th>Bars</th><th>Last bar age</th><th>Quality</th><th>Status</th><th>Last error</th></tr></thead>
+      <tbody id="feedRows"></tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h3>System status</h3>
+    <div id="sysInfo" class="muted">—</div>
+  </div>
+</section>
 
 </main>
-<footer>punch.trade — self-hosted signal platform. Paper broker by default; connect Kite / Binance / OpenAlgo for live execution on your own accounts.</footer>
-
 <script>
-const SERVER = location.origin;
-let token = localStorage.getItem("ptToken") || "punch-demo-token";
-let ws = null;
-let latest = { analytics: null, signals: [], openPositions: [], closedPositions: [], orders: [], strategies: [] };
-
+"use strict";
 const $ = (id) => document.getElementById(id);
-const fmt = (n, d = 2) => (n === null || n === undefined ? "—" : Number(n).toFixed(d));
-const pnlClass = (n) => (n >= 0 ? "pos" : "neg");
-const pnl = (n) => `<span class="${pnlClass(n)}">${n >= 0 ? "+" : ""}${fmt(n)}%</span>`;
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const time = (ts) => ts ? new Date(ts * 1000).toLocaleString() : "—";
+let token = localStorage.getItem("punch_token") || "";
+$("tokenInput").value = token;
+let ws = null, timer = null;
+let strategies = [];
 
-async function api(path, opts = {}) {
-  const res = await fetch(SERVER + path, {
-    headers: { "Content-Type": "application/json", "X-Punch-Token": token },
-    ...opts,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail?.message || data.detail || "Request failed (" + res.status + ")");
-  return data;
-}
-
-function setMsg(id, text, ok) { $(id).textContent = text; $(id).className = "msg " + (ok ? "ok" : "err"); }
-
-// ---------------------------------------------------------------- tabs --
-document.querySelectorAll("nav button").forEach((b) => {
-  b.onclick = () => {
-    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
-    document.querySelectorAll("section.tab").forEach((x) => x.classList.remove("active"));
-    b.classList.add("active");
-    $("tab-" + b.dataset.tab).classList.add("active");
-  };
-});
-
-// ---------------------------------------------------------------- token --
-$("token").value = token;
-$("saveToken").onclick = () => { token = $("token").value.trim() || token; localStorage.setItem("ptToken", token); refreshAll(); };
-
-// --------------------------------------------------------------- charts --
-function drawEquity(curve) {
-  const canvas = $("equityChart");
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  canvas.width = w * dpr; canvas.height = h * dpr;
-  const ctx = canvas.getContext("2d");
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#0d1117"; ctx.fillRect(0, 0, w, h);
-  if (!curve || curve.length < 2) {
-    ctx.fillStyle = "#8b949e"; ctx.font = "13px sans-serif";
-    ctx.fillText("Not enough closed trades yet — run a backtest or place a paper order.", 20, h / 2);
-    return;
-  }
-  const vals = curve.map((c) => c.equity);
-  const min = Math.min(0, ...vals), max = Math.max(0, ...vals);
-  const span = (max - min) || 1;
-  const x = (i) => 10 + (i / (curve.length - 1)) * (w - 20);
-  const y = (v) => h - 10 - ((v - min) / span) * (h - 20);
-  ctx.strokeStyle = "#30363d"; ctx.beginPath(); ctx.moveTo(10, y(0)); ctx.lineTo(w - 10, y(0)); ctx.stroke();
-  ctx.strokeStyle = curve[curve.length - 1].equity >= 0 ? "#3fb950" : "#f85149";
-  ctx.lineWidth = 2; ctx.beginPath();
-  curve.forEach((c, i) => (i === 0 ? ctx.moveTo(x(i), y(c.equity)) : ctx.lineTo(x(i), y(c.equity))));
-  ctx.stroke();
-  const last = curve[curve.length - 1].equity;
-  ctx.fillStyle = last >= 0 ? "#3fb950" : "#f85149"; ctx.font = "12px ui-monospace, monospace";
-  ctx.fillText((last >= 0 ? "+" : "") + last.toFixed(2) + "%", w - 80, y(last) - 6);
-}
-
-// ------------------------------------------------------------ candles --
-let candleChart = null, candleSeries = null, currentSym = null;
-const chartMarkers = [];
-
-function initChart() {
-  if (!window.LightweightCharts || candleChart) return;
-  candleChart = LightweightCharts.createChart($("candleChart"), {
-    layout: { background: { color: "#0d1117" }, textColor: "#8b949e" },
-    grid: { vertLines: { color: "#161b22" }, horzLines: { color: "#161b22" } },
-    timeScale: { timeVisible: true, secondsVisible: false },
-    rightPriceScale: { borderColor: "#30363d" },
-  });
-  candleSeries = candleChart.addCandlestickSeries({
-    upColor: "#3fb950", downColor: "#f85149",
-    borderUpColor: "#3fb950", borderDownColor: "#f85149",
-    wickUpColor: "#3fb950", wickDownColor: "#f85149",
-  });
-  try {
-    new ResizeObserver(() => candleChart.applyOptions({ width: $("candleChart").clientWidth })).observe($("candleChart"));
-  } catch (_) {}
-  candleChart.applyOptions({ width: $("candleChart").clientWidth });
-}
-
-function setChartSymbol(sym) {
-  if (!candleChart) initChart();
-  currentSym = sym;
-  $("chartSymLabel").textContent = sym;
-  document.querySelectorAll("#chartTabs button").forEach((b) => b.classList.toggle("active", b.dataset.sym === sym));
-  loadCandles(sym);
-}
-
-async function loadCandles(sym) {
-  if (!candleChart) return;
-  try {
-    const res = await fetch(SERVER + "/api/candles?symbol=" + encodeURIComponent(sym) + "&limit=120",
-      { headers: { "X-Punch-Token": token } });
-    const r = await res.json();
-    const data = (r.bars || []).map((b) => ({ time: Math.floor(b.ts), open: b.open, high: b.high, low: b.low, close: b.close }));
-    candleSeries.setData(data);
-    const marks = chartMarkers.filter((m) => m.symbol === sym).map((m) => ({
-      time: Math.floor(m.ts), position: "belowBar", color: "#3fb950",
-      shape: "arrowUp", text: m.strategyName,
-    }));
-    candleSeries.setMarkers(marks);
-    candleChart.timeScale().fitContent();
-  } catch (_) {}
-}
-
-function refreshCandles() { if (currentSym && candleChart) loadCandles(currentSym); }
-
-// ------------------------------------------------------------ overview --
-function renderStats(a) {
-  if (!a) return;
-  $("statCards").innerHTML = `
-    <div class="stat"><div class="label">Win rate</div><div class="value">${fmt(a.winRate, 1)}%</div></div>
-    <div class="stat"><div class="label">Net PnL</div><div class="value ${pnlClass(a.netPnlPct)}">${a.netPnlPct >= 0 ? "+" : ""}${fmt(a.netPnlPct)}%</div></div>
-    <div class="stat"><div class="label">Closed trades</div><div class="value">${a.closed} <span style="font-size:12px;color:var(--muted)">${a.wins}W / ${a.losses}L</span></div></div>
-    <div class="stat"><div class="label">Open positions</div><div class="value">${a.openPositions}</div></div>`;
-  drawEquity(a.equityCurve);
-  $("recentCloses").innerHTML = a.recentCloses.length
-    ? `<tr><th>Symbol</th><th>Exit</th><th>Entry</th><th>PnL</th><th>When</th></tr>` + a.recentCloses.map((p) => `
-      <tr class="flash"><td>${esc(p.symbol)}</td>
-      <td><span class="badge ${p.exit === "SL" ? "loss" : "win"}">${esc(p.exit)}</span></td>
-      <td>${fmt(p.entry)}</td><td>${pnl(p.pnl_pct)}</td><td>${time(p.opened_at)}</td></tr>`).join("")
-    : `<tr><td colspan="5" class="empty">No closed trades yet</td></tr>`;
-}
-
-function renderSignals(signals) {
-  $("signalTable").innerHTML = signals.length
-    ? `<tr><th>Symbol</th><th>Strategy</th><th>Entry</th><th>Targets</th><th>Stop</th><th>When</th></tr>` +
-      signals.map((s) => `<tr>
-        <td>${esc(s.symbol)} <span class="badge signal">${esc(s.side)}</span></td>
-        <td>${esc(s.strategyName)}</td><td>${fmt(s.entry)}</td>
-        <td>${(s.targets || [s.targetPrice]).map((t, i) => `<span class="tp-lv">TP${i + 1} ${fmt(t)}</span>`).join(" ")}</td>
-        <td>${fmt(s.stopLoss)}</td><td>${time(s.ts)}</td></tr>`).join("")
-    : `<tr><td colspan="6" class="empty">Waiting for live signals…</td></tr>`;
-}
-
-// ---------------------------------------------------------- strategies --
-function renderStrategies() {
-  $("stratGrid").innerHTML = latest.strategies.map((s) => `
-    <div class="strat-card">
-      <div><span class="name">${esc(s.name)}</span> <span class="sym">${esc(s.symbol)}</span></div>
-      <div class="desc">${esc(s.description)}</div>
-      <div class="stat-row"><span class="k">Interval</span><span>${s.interval}</span></div>
-      <div class="stat-row"><span class="k">TP levels</span><span>${(s.tp_levels || [s.tp_pct]).map((p) => `+${p}%`).join(" → ")}</span></div>
-      <div class="stat-row"><span class="k">SL</span><span>−${s.sl_pct}%</span></div>
-      <div class="stat-row"><span class="k">Backtest (paper)</span><span id="bt-${s.id}">—</span></div>
-      <div class="bt-row">
-        <select id="btBroker-${s.id}">
-          <option value="paper">paper</option>
-          <option value="binance">binance</option>
-        </select>
-        <button class="btn small" data-bt="${s.id}">Run backtest</button>
-      </div>
-    </div>`).join("");
-
-  document.querySelectorAll("[data-bt]").forEach((b) => {
-    b.onclick = async () => {
-      const sid = b.dataset.bt;
-      b.disabled = true; b.textContent = "Running…";
-      const el = $("bt-" + sid);
-      const brokerSel = $("btBroker-" + sid);
-      try {
-        const r = await api(`/api/strategies/${sid}/backtest`, {
-          method: "POST",
-          body: JSON.stringify({ broker: brokerSel.value, interval: "5m", days: 30 }),
-        });
-        el.textContent = `${r.trades} trades · ${fmt(r.winRate, 1)}% win · ${fmt(r.netReturnPct)}% net · DD ${fmt(r.maxDrawdownPct)}% · Sharpe ${fmt(r.sharpe, 2)} · PF ${fmt(r.profitFactor, 2)}`;
-      } catch (e) { el.textContent = "backtest failed: " + e.message; }
-      b.disabled = false; b.textContent = "Run backtest";
-    };
-  });
-}
-
-// ----------------------------------------------------------- positions --
-function renderPositions() {
-  const open = latest.openPositions || [];
-  $("openPosTable").innerHTML = open.length
-    ? `<tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Target</th><th>Stop</th><th>PnL</th><th>Status</th></tr>` +
-      open.map((p) => `<tr>
-        <td>${esc(p.symbol)}</td><td>${esc(p.side)}</td><td>${p.qty}</td><td>${fmt(p.entry)}</td>
-        <td>${fmt(p.target)}</td><td>${fmt(p.stop)}</td><td>${pnl(p.pnl_pct)}</td>
-        <td><span class="badge open">open</span></td></tr>`).join("")
-    : `<tr><td colspan="8" class="empty">No open positions</td></tr>`;
-
-  const closed = latest.closedPositions || [];
-  $("closedPosTable").innerHTML = closed.length
-    ? `<tr><th>Symbol</th><th>Exit</th><th>Entry</th><th>Exit price</th><th>PnL</th><th>When</th></tr>` +
-      closed.slice().reverse().map((p) => `<tr>
-        <td>${esc(p.symbol)}</td>
-        <td><span class="badge ${p.exit === "SL" ? "loss" : "win"}">${esc(p.exit)}</span></td>
-        <td>${fmt(p.entry)}</td><td>${fmt(p.exit_price)}</td><td>${pnl(p.pnl_pct)}</td><td>${time(p.opened_at)}</td></tr>`).join("")
-    : `<tr><td colspan="6" class="empty">No closed trades yet</td></tr>`;
-}
-
-// -------------------------------------------------------------- orders --
-function renderOrders() {
-  const rows = (latest.orders || []).slice().reverse();
-  $("orderTable").innerHTML = rows.length
-    ? `<tr><th>When</th><th>Broker</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Target</th><th>Stop</th><th>Status</th></tr>` +
-      rows.map((o) => `<tr>
-        <td>${time(o.ts)}</td><td>${esc(o.broker)}</td><td>${esc(o.symbol)}</td>
-        <td>${esc(o.side)}</td><td>${o.qty}</td><td>${fmt(o.entry)}</td><td>${fmt(o.target)}</td>
-        <td>${fmt(o.stop)}</td><td>${esc((o.result || {}).status || "?")}</td></tr>`).join("")
-    : `<tr><td colspan="9" class="empty">No orders placed yet — hit PUNCH on the extension overlay or in the demo page</td></tr>`;
-}
-
-// ------------------------------------------------------------- brokers --
-function renderBrokers(status) {
-  $("brokerList").innerHTML = Object.entries(status || {}).map(([name, st]) => `
-    <div class="broker-row">
-      <span style="font-weight:600">${esc(name)}</span>
-      ${st.connected
-        ? `<span class="badge open">connected${st.testnet ? " · testnet" : ""}${st.account ? " · " + esc(st.account) : ""}</span>`
-        : `<span class="badge loss">disconnected${st.error ? " · " + esc(st.error) : ""}</span>`}
-    </div>`).join("");
-}
-
-// ---------------------------------------------------------------- ws ----
-function connectWS() {
-  try { if (ws) ws.close(); } catch (_) {}
-  ws = new WebSocket(SERVER.replace(/^http/, "ws") + "/ws/signals");
-  ws.onopen = () => { ws.send(JSON.stringify({ type: "auth", token })); };
-  ws.onclose = () => { $("dot").classList.remove("on"); $("connText").textContent = "reconnecting…"; setTimeout(connectWS, 3000); };
-  ws.onmessage = (ev) => {
-    let msg; try { msg = JSON.parse(ev.data); } catch (_) { return; }
-    if (msg.type === "auth_ok") { $("dot").classList.add("on"); $("connText").textContent = "live"; return; }
-    if (msg.type === "snapshot") {
-      latest.signals = msg.data.signals || [];
-      renderSignals(latest.signals);
-    } else if (msg.type === "signal") {
-      latest.signals.unshift(msg.data);
-      latest.signals = latest.signals.slice(0, 50);
-      renderSignals(latest.signals);
-      chartMarkers.push(msg.data);
-      if (currentSym === msg.data.symbol) refreshCandles();
-      refreshAnalytics();
-    } else if (msg.type === "position") {
-      refreshAnalytics();
-      refreshPositions();
+function api(path, opts = {}) {
+  const headers = Object.assign({}, opts.headers || {});
+  if (token) headers["X-Punch-Token"] = token;
+  if (opts.body) headers["Content-Type"] = "application/json";
+  const p = { method: opts.method || "GET", headers };
+  if (opts.body) p.body = JSON.stringify(opts.body);
+  return fetch(path, p).then(async (r) => {
+    if (!r.ok) {
+      let msg = r.status + " " + r.statusText;
+      try { const j = await r.json(); if (j.error) msg = j.error.code + ": " + j.error.message; } catch (_) {}
+      throw new Error(msg);
     }
-  };
+    return r.json();
+  });
+}
+const fmtTs = (ts) => ts ? new Date(ts * 1000).toLocaleTimeString() : "—";
+const fmtN = (n, d = 2) => (n === null || n === undefined) ? "—" : Number(n).toFixed(d);
+const pnlClass = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
+
+function chip(status, text) {
+  const s = String(status || "").toLowerCase();
+  const cls = (s.includes("fill") || s.includes("execute") || s.includes("live") || s.includes("ok") || s.includes("pass")) ? "ok"
+    : (s.includes("reject") || s.includes("fail") || s.includes("stale") || s.includes("bad") || s.includes("expired")) ? "bad"
+    : (s.includes("partial") || s.includes("candid") || s.includes("pending") || s.includes("watch") || s.includes("warn")) ? "warn" : "mut";
+  return `<span class="chip ${cls}">${text || status || "—"}</span>`;
 }
 
-// ------------------------------------------------------------- refresh --
-async function refreshAnalytics() {
-  try { latest.analytics = await api("/api/analytics"); renderStats(latest.analytics); } catch (_) {}
+// ---------------- signals ----------------
+function signalRow(s) {
+  const age = s.ts ? Math.round((Date.now() / 1000 - s.ts)) : null;
+  return `<tr>
+    <td class="mono">${fmtTs(s.ts)}</td>
+    <td>${s.symbol || "—"}</td>
+    <td class="${s.side === "buy" ? "pos" : "neg"}">${(s.side || "—").toUpperCase()}</td>
+    <td class="mono">${s.entry ?? "—"}</td>
+    <td class="mono">${Array.isArray(s.targets) ? s.targets.join(" / ") : (s.targetPrice ?? "—")}</td>
+    <td class="mono">${s.stopLoss ?? "—"}</td>
+    <td>${s.strategyName || s.strategyId || "—"}</td>
+    <td>${chip(s.status)}</td>
+    <td class="muted">${age === null ? "—" : age + "s"}</td>
+    <td>${(s.status === "ACTIVE" || s.status === "CANDIDATE") ? `<button onclick="executeSignal('${s.id}')">Execute</button>` : ""}</td>
+  </tr>`;
 }
-async function refreshLeaderboard() {
-  try { renderLeaderboard((await api("/api/strategies/leaderboard")).rows || []); } catch (_) {}
+function renderSignals(list) {
+  const rows = list.slice().reverse();
+  $("signalRows").innerHTML = rows.map(signalRow).join("") || `<tr><td colspan="10" class="muted">no signals yet — waiting for the paper feed</td></tr>`;
+  const active = rows.filter(s => ["ACTIVE", "CANDIDATE", "PARTIAL"].includes(s.status));
+  $("signalStats").innerHTML =
+    stat("Total", rows.length) + stat("Active", active.length) + stat("Executed", rows.filter(s => s.status === "EXECUTED").length) + stat("Rejected", rows.filter(s => s.status === "REJECTED").length);
 }
-function renderLeaderboard(rows) {
-  $("leaderboardTable").innerHTML = rows.length
-    ? `<tr><th>#</th><th>Strategy</th><th>Symbol</th><th>Win rate</th><th>Net %</th><th>DD %</th><th>Sharpe</th><th>PF</th><th>Trades</th></tr>` +
-      rows.map((r, i) => `<tr>
-        <td>${i + 1}</td><td>${esc(r.name)}</td><td>${esc(r.symbol)}</td>
-        <td>${fmt(r.winRate, 1)}%</td><td class="${pnlClass(r.netReturnPct)}">${r.netReturnPct >= 0 ? "+" : ""}${fmt(r.netReturnPct)}</td>
-        <td>${fmt(r.maxDrawdownPct)}</td><td>${fmt(r.sharpe, 2)}</td><td>${fmt(r.profitFactor, 2)}</td><td>${r.trades}</td></tr>`).join("")
-    : `<tr><td colspan="9" class="empty">No backtest data yet — refresh or run a backtest</td></tr>`;
+function stat(label, value) {
+  return `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div></div>`;
 }
-async function refreshSignals() {
-  try { latest.signals = (await api("/api/signals/history")).signals.slice(-50); renderSignals(latest.signals); } catch (_) {}
+function executeSignal(id) {
+  api("/api/orders", { method: "POST", body: { broker: "paper", signalId: id } })
+    .then(r => alert("Order " + (r.result && r.result.orderId || "placed") + " — " + (r.duplicate ? "duplicate replay" : "executed")))
+    .catch(e => alert("Failed: " + e.message));
 }
-async function refreshPositions() {
-  try {
-    const open = (await api("/api/positions")).positions || [];
-    latest.openPositions = open;
-    const a = latest.analytics || (await api("/api/analytics"));
-    latest.closedPositions = a.recentCloses;
-    renderPositions();
-  } catch (_) {}
+
+// ---------------- positions ----------------
+function loadPositions() {
+  Promise.all([
+    api("/api/positions").catch(() => ({ positions: [] })),
+    api("/api/fills").catch(() => ({ fills: [] }))
+  ]).then(([p, f]) => {
+    $("positionRows").innerHTML = (p.positions || []).map(x => `<tr>
+      <td class="mono">${x.id || "—"}</td><td>${x.symbol}</td>
+      <td class="${x.side === "buy" ? "pos" : "neg"}">${(x.side || "").toUpperCase()}</td>
+      <td>${x.qty ?? x.qty_total ?? "—"}</td>
+      <td class="mono">${x.entry ?? "—"}</td>
+      <td class="mono">${x.exit ?? "—"}</td>
+      <td class="mono ${pnlClass(x.pnl)}">${x.pnl !== undefined ? fmtN(x.pnl) : "—"}</td>
+      <td class="mono">${fmtTs(x.opened_at)}</td></tr>`).join("") || `<tr><td colspan="8" class="muted">no open positions</td></tr>`;
+    $("fillRows").innerHTML = (f.fills || []).slice().reverse().slice(0, 30).map(x => `<tr>
+      <td class="mono">${fmtTs(x.ts)}</td><td>${x.symbol}</td>
+      <td class="${x.side === "buy" ? "pos" : "neg"}">${(x.side || "").toUpperCase()}</td>
+      <td>${x.qty ?? "—"}</td><td class="mono">${x.price ?? x.exit_price ?? "—"}</td>
+      <td>${chip(x.exit || (x.reason || ""))}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">no fills yet</td></tr>`;
+  }).catch(e => { $("positionRows").innerHTML = `<tr><td colspan="8" class="err">${e.message}</td></tr>`; });
 }
-async function refreshOrders() {
-  try { latest.orders = (await api("/api/orders/history")).orders; renderOrders(); } catch (_) {}
+
+// ---------------- execution ----------------
+function loadExecution() {
+  api("/api/execution/ledger").then(r => {
+    $("ledgerRows").innerHTML = (r.orders || []).slice().reverse().map(o => `<tr>
+      <td class="mono">${o.id}</td><td>${o.symbol}</td>
+      <td class="${o.side === "buy" ? "pos" : "neg"}">${(o.side || "").toUpperCase()}</td>
+      <td>${o.qty}</td><td class="mono">${o.entry}</td><td>${o.broker}</td>
+      <td>${chip(o.status)}</td><td class="mono">${o.signalId ? o.signalId.slice(0, 12) : "—"}</td>
+      <td class="mono">${fmtTs(o.updatedTs)}</td></tr>`).join("") || `<tr><td colspan="9" class="muted">empty ledger</td></tr>`;
+  }).catch(e => { $("ledgerRows").innerHTML = `<tr><td colspan="9" class="err">${e.message}</td></tr>`; });
+  api("/api/execution/trades").then(r => {
+    $("tradeRows").innerHTML = (r.trades || []).slice().reverse().map(t => `<tr>
+      <td class="mono">${t.id || "—"}</td><td>${t.symbol}</td>
+      <td class="${t.side === "buy" ? "pos" : "neg"}">${(t.side || "").toUpperCase()}</td>
+      <td>${t.qty}</td><td class="mono">${t.entryPrice}</td><td class="mono">${t.exitPrice}</td>
+      <td class="mono ${pnlClass(t.netPnl)}">${fmtN(t.netPnl)}</td>
+      <td class="mono ${pnlClass(t.netPnlPct)}">${fmtN(t.netPnlPct)}</td>
+      <td>${chip(t.exitReason || "MANUAL")}</td><td class="muted">${t.strategyId || "manual"}</td></tr>`).join("") || `<tr><td colspan="10" class="muted">no closed trades yet</td></tr>`;
+  }).catch(e => { $("tradeRows").innerHTML = `<tr><td colspan="10" class="err">${e.message}</td></tr>`; });
+  loadReconcileState();
 }
-async function refreshBrokers() {
-  try { latestBrokers = await api("/api/broker/status"); renderBrokers(latestBrokers); } catch (_) {}
+function loadReconcileState() {
+  api("/api/risk/state").then(r => {
+    $("reconcileState").textContent = "reconciliation gate: " + (r.reconciliationOk ? "OPEN" : "CLOSED") + (r.breakerOpen ? " · BREAKER OPEN" : "") + (r.armed.length ? " · armed: " + r.armed.join(",") : " · not armed");
+    $("reconcileState").className = (r.reconciliationOk && !r.breakerOpen) ? "muted" : "err";
+  }).catch(() => {});
 }
-async function refreshStrategies() {
-  try {
-    latest.strategies = (await api("/api/strategies")).strategies;
-    renderStrategies();
-    const syms = [...new Set(latest.strategies.map((s) => s.symbol))];
-    $("chartTabs").innerHTML = syms.map((s) =>
-      `<button data-sym="${esc(s)}" class="${s === currentSym ? "active" : ""}">${esc(s)}</button>`).join("");
-    document.querySelectorAll("#chartTabs button").forEach((b) => b.onclick = () => setChartSymbol(b.dataset.sym));
-    if (!currentSym && syms.length) setChartSymbol(syms[0]);
-  } catch (_) {}
+$("btnReconcile").onclick = () => {
+  $("btnReconcile").disabled = true;
+  api("/api/execution/reconcile", { method: "POST", body: { broker: "paper" } })
+    .then(r => { alert("reconcile ok=" + r.ok + " mismatches=" + r.mismatches.length + "\n" + r.mismatches.map(m => m.type + ": " + m.detail).join("\n")); loadReconcileState(); })
+    .catch(e => alert(e.message))
+    .finally(() => { $("btnReconcile").disabled = false; });
+};
+
+// ---------------- research + ai ----------------
+function loadStrategies() {
+  api("/api/strategies").then(r => {
+    strategies = r.strategies || [];
+    $("strategyPick").innerHTML = strategies.map(s => `<option value="${s.id}">${s.id} — ${s.name} (${s.symbol})</option>`).join("");
+  }).catch(e => $("strategyPick").innerHTML = `<option>${e.message}</option>`);
+}
+$("btnResearch").onclick = runResearch;
+$("btnAi").onclick = runAi;
+function runResearch() {
+  const id = $("strategyPick").value;
+  if (!id) return;
+  $("researchLoading").textContent = "running…";
+  api("/api/research/" + id, { method: "POST", body: {} })
+    .then(r => {
+      $("researchLoading").textContent = "";
+      const gate = r.qualityGate || {};
+      $("researchGate").innerHTML =
+        `<div class="row">${chip(gate.passed ? "PASSED" : "FAILED", gate.passed ? "PASSED" : "FAILED")} <span class="muted">score ${fmtN(gate.score, 0)}/100</span></div>` +
+        `<div class="muted" style="margin-top:6px">${(gate.reasons || []).join("<br>") || "no reasons"}</div>`;
+      const m = r.metrics || {};
+      $("researchMetrics").innerHTML =
+        `trades ${m.trades ?? "—"} · win ${fmtN(m.win_rate * 100, 1)}% · PF ${fmtN(m.profit_factor)}<br>` +
+        `net PnL <span class="${pnlClass(m.net_pnl)}">${fmtN(m.net_pnl)}</span> · expectancy ${fmtN(m.expectancy)}<br>` +
+        `max DD ${fmtN(m.max_drawdown_pct, 2)}% · consecutive losses ${m.max_consecutive_losses ?? "—"} · sharpe ${fmtN(m.sharpe)}`;
+      const wf = r.walkForward || {}, bs = r.bootstrap || {};
+      $("researchWf").innerHTML =
+        `walk-forward: consistency ${fmtN(wf.consistency * 100, 0)}% over ${wf.windows ?? "—"} windows<br>` +
+        `bootstrap: mean expectancy ${bs.meanExpectancy !== undefined ? fmtN(bs.meanExpectancy) : "insufficient trades"}${bs.error ? ` · ${bs.error}` : ""}` +
+        (r.parameterStability ? `<br>parameter stability: ${chip(r.parameterStability.passed ? "PASSED" : "FAILED")} (worst ${fmtN(r.parameterStability.worst, 0)}/100)` : "");
+      $("researchRegime").innerHTML = (r.regimePerformance || []).map(rg =>
+        `<div>${rg.regime}: ${rg.trades} trades · win ${fmtN((rg.win_rate || 0) * 100, 0)}%</div>`).join("") || "no regime breakdown";
+    })
+    .catch(e => { $("researchLoading").textContent = ""; $("researchGate").innerHTML = `<span class="err">${e.message}</span>`; });
+}
+function runAi() {
+  const id = $("strategyPick").value;
+  if (!id) return;
+  $("aiOutput").textContent = "thinking (local model)…";
+  api("/api/ai/analyze/" + id, { method: "POST" })
+    .then(r => {
+      $("aiMeta").textContent = r.model ? "(" + r.model + " · " + r.elapsedSec + "s)" : "";
+      $("aiOutput").textContent = r.analysis || (r.error || "analysis unavailable");
+    })
+    .catch(e => { $("aiOutput").textContent = "failed: " + e.message; });
+}
+
+// ---------------- risk ----------------
+function loadRisk() {
+  api("/api/risk/state").then(r => {
+    $("riskStats").innerHTML =
+      stat("Mode", r.mode) +
+      stat("Armed", r.armed.join(",") || "none") +
+      stat("Consecutive losses", r.consecutiveLosses) +
+      stat("Breaker", r.breakerOpen ? "OPEN" : "closed") +
+      stat("Reconciliation", r.reconciliationOk ? "ok" : "blocked") +
+      stat("Max positions", r.maxPositions);
+  }).catch(() => {});
+}
+$("btnSize").onclick = () => {
+  api("/api/risk/sizing", { method: "POST", body: {
+    equity: Number($("sizeEquity").value), entry: Number($("sizeEntry").value),
+    stop: Number($("sizeStop").value), riskPct: Number($("sizeRisk").value) / 100 } })
+    .then(r => { $("sizeOut").textContent = `qty ${r.qty} · risk ₹${fmtN(r.riskAmount)} (${fmtN((r.riskPerShare / r.entry) * 100, 2)}%/share on ₹${fmtN(r.entry)})`; $("sizeOut").className = "ok-msg"; })
+    .catch(e => { $("sizeOut").textContent = e.message; $("sizeOut").className = "err"; });
+};
+$("btnBreakerReset").onclick = () => {
+  api("/api/risk/breaker/reset", { method: "POST", body: {} })
+    .then(r => { alert("breaker reset: " + r.reset); loadRisk(); })
+    .catch(e => alert(e.message));
+};
+
+// ---------------- strategies ----------------
+function loadStatus() {
+  api("/api/strategies/status").then(r => {
+    $("statusRows").innerHTML = (r.rows || []).map(s => `<tr>
+      <td><b>${s.id}</b><br><span class="muted">${s.name || ""}</span></td>
+      <td>${s.symbol}</td><td>${chip(s.status)}</td>
+      <td class="mono">${fmtN(s.score, 0)}</td><td class="muted">${s.reason || "—"}</td>
+      <td class="muted">${(s.canPromoteTo || []).join(", ") || "—"}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">no strategies</td></tr>`;
+  }).catch(e => { $("statusRows").innerHTML = `<tr><td colspan="6" class="err">${e.message}</td></tr>`; });
+  api("/api/strategies/leaderboard").then(r => {
+    $("leaderboardRows").innerHTML = (r.rows || []).map((s, i) => `<tr>
+      <td>${i + 1}</td><td>${s.id}</td><td>${s.symbol}</td>
+      <td class="mono">${fmtN(s.winRate * 100, 1)}%</td>
+      <td class="mono ${pnlClass(s.netReturnPct)}">${fmtN(s.netReturnPct)}%</td>
+      <td class="mono">${fmtN(s.maxDrawdownPct, 2)}%</td>
+      <td class="mono">${fmtN(s.sharpe)}</td>
+      <td class="mono">${fmtN(s.profitFactor)}</td><td>${s.trades}</td></tr>`).join("") || `<tr><td colspan="9" class="muted">no data</td></tr>`;
+  }).catch(e => { $("leaderboardRows").innerHTML = `<tr><td colspan="9" class="err">${e.message}</td></tr>`; });
+}
+
+// ---------------- system ----------------
+function loadSystem() {
+  api("/api/system/storage").then(r => {
+    $("storageInfo").innerHTML =
+      `engine <b>${r.engine}</b> · journal <b>${r.journalMode}</b> · schema v${r.schemaVersion}<br>` +
+      `signals ${r.counts.signals} · orders ${r.counts.orders} · positions ${r.counts.positions} · trades ${r.counts.trades}<br>` +
+      `research runs ${r.counts.research_runs} · status snapshots ${r.counts.strategy_status} · sessions ${r.counts.sessions}`;
+  }).catch(e => { $("storageInfo").textContent = e.message; });
+  api("/api/v1/system/metrics").then(r => {
+    const c = r.counters || {};
+    $("metricInfo").innerHTML =
+      `uptime ${Math.round(r.uptimeSec / 60)}m · requests ${c.requests || 0} · errors ${r.errorBuckets["5xx"] || 0}<br>` +
+      `signals live ${r.signals.live} · orders filled ${r.orders.filled}/${r.orders.ledger} · rejected ${r.orders.rejected}<br>` +
+      `closed trades ${r.trades.closed} · breaker ${r.risk.breakerOpen ? "OPEN" : "closed"} · recon ${r.risk.reconciliationOk ? "ok" : "blocked"}`;
+  }).catch(e => { $("metricInfo").textContent = e.message; });
+  api("/api/system/status").then(r => {
+    $("feedRows").innerHTML = (r.feeds || []).map(f => `<tr>
+      <td>${f.symbol}</td><td>${f.source}</td><td>${f.bars}</td>
+      <td class="mono">${f.lastBarAgeSec === null ? "—" : fmtN(f.lastBarAgeSec, 1) + "s"}</td>
+      <td>${chip(f.quality, f.quality)}</td><td>${chip(f.stale ? "STALE" : "OK")}</td>
+      <td class="err">${f.lastError || ""}</td></tr>`).join("") || `<tr><td colspan="7" class="muted">no feeds</td></tr>`;
+    $("sysInfo").innerHTML =
+      `mode <b>${r.mode}</b> · armed [${r.armed.join(", ")}] · emergencyStop ${r.emergencyStop}<br>` +
+      `version ${r.version} · started ${fmtTs(r.startedAt)} · signals TTL ${r.signalsTtlSec}s`;
+  }).catch(e => { $("sysInfo").textContent = e.message; });
+  api("/api/v1/system/health").then(h => {
+    const cls = h.status === "ok" ? "ok-msg" : "err";
+    const el = document.createElement("div");
+    el.className = cls; el.textContent = "health: " + h.status + " · db " + (h.db.ok ? "ok" : "down") + " · feed " + (h.feed.ok ? "ok" : "stale: " + h.feed.staleSymbols.join(","));
+    const p = $("sysInfo"); if (p) { p.appendChild(el); }
+  }).catch(() => {});
+}
+
+// ---------------- session / ws ----------------
+function connectWs() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(proto + "//" + location.host + "/ws/signals");
+  ws.onopen = () => {
+    setConn(true);
+    if (token) ws.send(JSON.stringify({ type: "auth", token }));
+    ws.send(JSON.stringify({ type: "subscribe", channel: "signals" }));
+  };
+  ws.onclose = () => { setConn(false); setTimeout(connectWs, 3000); };
+  ws.onmessage = (ev) => {
+    try {
+      const m = JSON.parse(ev.data);
+      if (m.type === "signal") { renderSignals([m.data]); }
+      else if (m.type === "position") { loadPositions(); }
+      else if (m.type === "snapshot" && m.signals) { renderSignals(m.signals); }
+      else if (m.type === "signal_update") { refreshAll(); }
+    } catch (_) {}
+  };
+}
+function setConn(on) {
+  $("connDot").className = "dot" + (on ? " on" : "");
+  $("connText").textContent = on ? "connected" : "disconnected";
 }
 function refreshAll() {
-  refreshAnalytics(); refreshSignals(); refreshPositions(); refreshOrders(); refreshBrokers(); refreshStrategies(); refreshLeaderboard(); refreshSystem();
+  loadPositions(); loadExecution(); loadRisk(); loadStatus(); loadSystem();
+}
+function refreshSignals() {
+  api("/api/signals/last").then(r => renderSignals(r.signals)).catch(() => {});
 }
 
-// ------------------------------------------------------------- system --
-async function refreshSystem() {
-  try {
-    const st = await api("/api/system/status");
-    $("modeSelect").value = st.mode;
-    $("modeState").innerHTML = `mode <b>${esc(st.mode)}</b> · armed: <b>${st.armed.length ? esc(st.armed.join(", ")) : "none"}</b> · emergency stop: <b>${st.emergencyStop ? "ACTIVE" : "no"}</b> · uptime ${Math.round(st.uptimeSec)}s · v${esc(st.version)}`;
-    $("armList").innerHTML = (Object.keys(st.feeds || {}).length ? Object.keys(latestBrokers || {}) : []).length
-      ? `<div class="bt-row" style="margin:0;flex-wrap:wrap">${Object.keys(latestBrokers || {}).map((b) => b === "paper" ? "" :
-          `<button class="btn small" data-arm="${esc(b)}" style="${st.armed.includes(b) ? "background:var(--green)" : ""}">${esc(b)}${st.armed.includes(b) ? " · armed" : ""}</button>`).join("")}</div>
-        <div class="muted-note" style="margin-top:6px">Arming only works in LIVE mode. It is never persisted.</div>`
-      : `<div class="muted-note">Connect a real broker in the Brokers tab to enable arming.</div>`;
-    document.querySelectorAll("[data-arm]").forEach((b) => b.onclick = async () => {
-      try {
-        const r = await api("/api/system/arm", { method: "POST", body: JSON.stringify({ broker: b.dataset.arm }) });
-        setMsg($("sysMsg"), `Armed: ${r.armed.join(", ") || "none"}`, true); refreshSystem();
-      } catch (e) { setMsg($("sysMsg"), e.message, false); }
-    });
-    const feeds = st.feeds || [];
-    $("feedTable").innerHTML = feeds.length
-      ? `<tr><th>Symbol</th><th>Source</th><th>Bars</th><th>Last bar age</th><th>State</th><th>Last error</th></tr>` +
-        feeds.map((f) => `<tr>
-          <td>${esc(f.symbol)}</td><td>${esc(f.source)}</td><td>${f.bars}</td>
-          <td>${f.lastBarAgeSec === null ? "—" : f.lastBarAgeSec + "s"}</td>
-          <td>${f.stale ? `<span class="badge loss">STALE</span>` : `<span class="badge open">fresh</span>`}</td>
-          <td>${esc(f.lastError || "—")}</td></tr>`).join("")
-      : `<tr><td colspan="6" class="empty">No feed yet</td></tr>`;
-  } catch (_) {}
-}
-let latestBrokers = {};
-$("setModeBtn").onclick = async () => {
-  try {
-    const r = await api("/api/system/mode", { method: "POST", body: JSON.stringify({ mode: $("modeSelect").value }) });
-    setMsg($("sysMsg"), `Mode set to ${r.mode}`, true); refreshSystem();
-  } catch (e) { setMsg($("sysMsg"), e.message, false); }
+$("saveToken").onclick = () => {
+  token = $("tokenInput").value.trim();
+  localStorage.setItem("punch_token", token);
+  refreshSignals(); refreshAll();
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "auth", token }));
 };
-$("stopBtn").onclick = async () => {
-  try {
-    const r = await api("/api/system/stop", { method: "POST" });
-    setMsg($("sysMsg"), "Emergency stop — mode=" + r.mode + ", everything disarmed", true); refreshSystem();
-  } catch (e) { setMsg($("sysMsg"), e.message, false); }
+$("btnLogin").onclick = () => {
+  api("/api/system/login", { method: "POST", credentials: "include" })
+    .then(() => alert("dashboard session created (httpOnly cookie, 12h)"))
+    .catch(e => alert(e.message));
+};
+$("btnLogout").onclick = () => {
+  const csrf = document.cookie.split("; ").find(c => c.startsWith("punch_csrf="));
+  api("/api/system/logout", { method: "POST", credentials: "include",
+    headers: csrf ? { "X-Punch-CSRF": decodeURIComponent(csrf.split("=")[1]) } : {} })
+    .then(() => alert("session revoked")).catch(e => alert(e.message));
 };
 
-// ---------------------------------------------------------- broker ui --
-$("kiteUrlBtn").onclick = async () => {
-  if (!$("kiteKey").value.trim()) return setMsg($("kiteMsg"), "Enter your API key", false);
-  try {
-    const r = await api("/api/broker/kite/login-url", { method: "POST", body: JSON.stringify({ api_key: $("kiteKey").value.trim() }) });
-    window.open(r.url, "_blank");
-    setMsg($("kiteMsg"), "Logged in — copy request_token from the redirect URL", true);
-  } catch (e) { setMsg($("kiteMsg"), e.message, false); }
-};
-$("kiteConnectBtn").onclick = async () => {
-  try {
-    await api("/api/broker/kite/connect", { method: "POST", body: JSON.stringify({
-      api_key: $("kiteKey").value.trim(), api_secret: $("kiteSecret").value.trim(),
-      request_token: $("kiteToken").value.trim() }) });
-    setMsg($("kiteMsg"), "Kite connected", true); refreshBrokers();
-  } catch (e) { setMsg($("kiteMsg"), e.message, false); }
-};
-$("bnConnectBtn").onclick = async () => {
-  try {
-    await api("/api/broker/binance/connect", { method: "POST", body: JSON.stringify({
-      api_key: $("bnKey").value.trim(), api_secret: $("bnSecret").value.trim(),
-      testnet: $("bnTestnet").checked }) });
-    setMsg($("bnMsg"), "Binance connected", true); refreshBrokers();
-  } catch (e) { setMsg($("bnMsg"), e.message, false); }
-};
-$("oaConnectBtn").onclick = async () => {
-  try {
-    await api("/api/broker/openalgo/connect", { method: "POST", body: JSON.stringify({
-      host: $("oaHost").value.trim(), apikey: $("oaKey").value.trim(),
-      broker: $("oaBroker").value.trim() || "zerodha" }) });
-    setMsg($("oaMsg"), "OpenAlgo connected", true); refreshBrokers();
-  } catch (e) { setMsg($("oaMsg"), e.message, false); }
-};
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll("section.tab").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  $("tab-" + b.dataset.tab).classList.add("active");
+});
 
-window.addEventListener("resize", () => { if (latest.analytics) drawEquity(latest.analytics.equityCurve); });
-connectWS();
+loadStrategies();
+refreshSignals();
 refreshAll();
-setInterval(refreshAnalytics, 10000);
-setInterval(refreshPositions, 15000);
-setInterval(refreshOrders, 20000);
-setInterval(refreshBrokers, 30000);
-setInterval(refreshCandles, 4000);
+connectWs();
+setInterval(() => { if (!document.hidden) { refreshSignals(); refreshAll(); } }, 15000);
 </script>
 </body>
 </html>
