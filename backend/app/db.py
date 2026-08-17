@@ -29,7 +29,7 @@ from contextlib import suppress
 
 from . import config
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # ordered migrations: (version, sql) — applied in a transaction, in order
 MIGRATIONS: list[tuple] = [
@@ -91,6 +91,22 @@ CREATE TABLE IF NOT EXISTS sessions (
     created_at REAL NOT NULL,
     ip TEXT NOT NULL DEFAULT '',
     user_agent TEXT NOT NULL DEFAULT ''
+);
+""",
+    ),
+    (
+        3,
+        """
+CREATE TABLE IF NOT EXISTS market_cache (
+    key TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    ts REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS watchlist (
+    id TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    ts REAL NOT NULL
 );
 """,
     ),
@@ -333,6 +349,66 @@ def write_strategy_status(sid: str, payload: dict) -> None:
             "INSERT OR REPLACE INTO strategy_status (id, payload, ts) VALUES (?,?,?)",
             (str(sid), json.dumps(payload), time.time()),
         )
+
+
+# -------------------------------------------------- market data cache ----
+def market_cache_get(key: str, max_age_sec: float = 300.0) -> dict | None:
+    """Cached market payload (candles / instrument metadata), if fresh."""
+    conn = get_conn()
+    row = conn.execute("SELECT payload, ts FROM market_cache WHERE key=?", (key,)).fetchone()
+    if row is None:
+        return None
+    if time.time() - row["ts"] > max_age_sec:
+        return None
+    try:
+        return json.loads(row["payload"])
+    except (ValueError, TypeError):
+        return None
+
+
+def market_cache_put(key: str, payload: dict) -> None:
+    with transaction() as c:
+        c.execute(
+            "INSERT OR REPLACE INTO market_cache (key, payload, ts) VALUES (?,?,?)",
+            (key, json.dumps(payload), time.time()),
+        )
+
+
+def market_cache_clear() -> int:
+    with transaction() as c:
+        cur = c.execute("DELETE FROM market_cache")
+        return cur.rowcount
+
+
+# ------------------------------------------------------------ watchlist ----
+def watchlist_add(entry: dict) -> dict:
+    wid = str(entry.get("id") or entry.get("symbol") or "")
+    if not wid:
+        raise ValueError("watchlist entry needs an id")
+    with transaction() as c:
+        c.execute(
+            "INSERT OR REPLACE INTO watchlist (id, payload, ts) VALUES (?,?,?)",
+            (wid, json.dumps(entry), time.time()),
+        )
+    return entry
+
+
+def watchlist_remove(wid: str) -> bool:
+    with transaction() as c:
+        cur = c.execute("DELETE FROM watchlist WHERE id=?", (wid,))
+        return cur.rowcount > 0
+
+
+def watchlist_all() -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute("SELECT payload FROM watchlist ORDER BY ts ASC").fetchall()
+    out = []
+    for r in rows:
+        try:
+            out.append(json.loads(r["payload"]))
+        except (ValueError, TypeError):
+            continue
+    return out
 
 
 # -------------------------------------------------------------- reads ----

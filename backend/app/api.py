@@ -43,6 +43,9 @@ from .broker.openalgo import OpenAlgoAdapter
 from .broker.paper import PaperBroker
 from .engine import build_runners
 from .feed import LiveFeed
+from .market_router import MarketRouter
+from .providers import mask_value
+from .providers.base import ProviderError
 from .proxy import router as proxy_router
 from .strategies import STRATEGIES, get_strategy, target_levels
 from .version import VERSION as APP_VERSION
@@ -239,6 +242,7 @@ class BrokerManager:
 
 brokers = BrokerManager()
 feed: LiveFeed | None = None
+market_router: MarketRouter | None = None
 
 
 # ------------------------------------------------------------ models ----
@@ -317,7 +321,7 @@ _loop: asyncio.AbstractEventLoop | None = None
 
 
 async def _startup() -> None:
-    global feed, _loop, closed_positions
+    global feed, market_router, _loop, closed_positions
     os.makedirs(DATA_DIR, exist_ok=True)
     _loop = asyncio.get_running_loop()
 
@@ -396,6 +400,40 @@ async def _startup() -> None:
         on_position_close=on_position_close,
     )
     feed.start()
+
+    # ---- multi-market data router (env + vault credentials) ----
+    market_router = MarketRouter()
+    asyncio.create_task(_market_broadcaster())
+    print(
+        "[startup] market data: "
+        + ", ".join(f"{pid}={p.health()['state']}" for pid, p in market_router.providers.items())
+    )
+
+
+async def _market_broadcaster() -> None:
+    """Push watchlist quotes + provider status over WS every 30 s."""
+    while True:
+        await asyncio.sleep(30)
+        try:
+            if market_router is None:
+                continue
+            entries = db.watchlist_all()
+            if not entries:
+                continue
+            quotes = []
+            for e in entries[:10]:
+                try:
+                    quotes.append(market_router.get_quote(e.get("symbol", "")))
+                except ProviderError:
+                    continue
+            await hub.broadcast(
+                {
+                    "type": "market.quote",
+                    "payload": {"quotes": quotes, "ts": time.time()},
+                }
+            )
+        except Exception:
+            continue
 
 
 def on_signal(signal: dict) -> None:
@@ -1309,6 +1347,146 @@ def analytics(_: None = Depends(require_token)) -> dict:
         "equityCurve": curve,
         "recentCloses": list(reversed(closed_positions[-10:])),
     }
+
+
+# ------------------------------------------------- market data api ----
+def _market() -> MarketRouter:
+    if market_router is None:
+        raise HTTPException(status_code=503, detail="Market data not initialized")
+    return market_router
+
+
+def _provider_error(e: ProviderError) -> HTTPException:
+    status = {e.code.value: 502}.get(e.code.value, 502)
+    return HTTPException(status_code=status, detail=e.to_dict())
+
+
+@app.get("/api/v1/market/providers")
+def market_providers(_: None = Depends(require_token)) -> dict:
+    """Sanitized provider status — never includes credentials."""
+    return {"providers": _market().provider_status(), "routes": _market().routes_table()}
+
+
+@app.get("/api/v1/market/providers/{provider_id}/health")
+def market_provider_health(provider_id: str, _: None = Depends(require_token)) -> dict:
+    p = _market().providers.get(provider_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Unknown provider")
+    return p.health()
+
+
+@app.get("/api/v1/market/search")
+def market_search(q: str, _: None = Depends(require_token), limit: int = 20) -> dict:
+    try:
+        return _market().search_instruments(q, limit)
+    except ProviderError as e:
+        raise _provider_error(e) from None
+
+
+@app.get("/api/v1/market/instruments")
+def market_instrument(symbol: str, _: None = Depends(require_token)) -> dict:
+    try:
+        instrument = _market().resolve_instrument(symbol)
+        return {"instrument": instrument.to_dict()}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail={"code": "SYMBOL_NOT_FOUND", "message": str(e)}
+        ) from None
+
+
+@app.get("/api/v1/market/quote")
+def market_quote(symbol: str, _: None = Depends(require_token)) -> dict:
+    try:
+        return _market().get_quote(symbol)
+    except ProviderError as e:
+        raise _provider_error(e) from None
+
+
+@app.get("/api/v1/market/candles")
+def market_candles(
+    symbol: str,
+    _: None = Depends(require_token),
+    interval: str = "5m",
+    limit: int = 300,
+) -> dict:
+    try:
+        return _market().get_candles(symbol, interval, limit=min(limit, 1000))
+    except ProviderError as e:
+        raise _provider_error(e) from None
+
+
+@app.get("/api/v1/market/watchlist")
+def market_watchlist(_: None = Depends(require_token)) -> dict:
+    return {"watchlist": db.watchlist_all()}
+
+
+class WatchlistAddReq(BaseModel):
+    symbol: str
+
+
+@app.post("/api/v1/market/watchlist")
+def market_watchlist_add(req: WatchlistAddReq, _: None = Depends(require_token)) -> dict:
+    try:
+        instrument = _market().resolve_instrument(req.symbol)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail={"code": "SYMBOL_NOT_FOUND", "message": str(e)}
+        ) from None
+    entry = {
+        "id": instrument.symbol,
+        "symbol": instrument.symbol,
+        "assetClass": instrument.asset_class.value,
+    }
+    db.watchlist_add(entry)
+    return {"added": entry, "watchlist": db.watchlist_all()}
+
+
+@app.delete("/api/v1/market/watchlist/{entry_id:path}")
+def market_watchlist_remove(entry_id: str, _: None = Depends(require_token)) -> dict:
+    removed = db.watchlist_remove(entry_id)
+    return {"removed": removed, "watchlist": db.watchlist_all()}
+
+
+class CredentialReq(BaseModel):
+    values: dict[str, str]
+
+
+# provider id -> accepted credential field names (only these are stored)
+_CRED_FIELDS = {
+    "dhan": ("client_id", "access_token"),
+    "upstox": ("client_id", "client_secret", "access_token"),
+    "angel": ("api_key", "client_code", "totp_secret"),
+    "alpaca": ("api_key", "api_secret"),
+    "twelve_data": ("api_key",),
+    "alpha_vantage": ("api_key",),
+}
+
+
+@app.post("/api/v1/market/credentials/{provider_id}")
+def market_credentials_save(
+    provider_id: str, req: CredentialReq, _: None = Depends(require_token)
+) -> dict:
+    """Store provider credentials in the encrypted vault (never returned)."""
+    global market_router
+    fields = _CRED_FIELDS.get(provider_id)
+    if fields is None:
+        raise HTTPException(status_code=404, detail="Unknown provider")
+    cleaned = {k: str(v).strip() for k, v in req.values.items() if k in fields and str(v).strip()}
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="No valid credential fields supplied")
+    vault.save(f"md_{provider_id}", cleaned)
+    market_router = MarketRouter()
+    return {"saved": True, "configured": {k: mask_value(v) for k, v in cleaned.items()}}
+
+
+@app.delete("/api/v1/market/credentials/{provider_id}")
+def market_credentials_delete(provider_id: str, _: None = Depends(require_token)) -> dict:
+    global market_router
+    if provider_id not in _CRED_FIELDS:
+        raise HTTPException(status_code=404, detail="Unknown provider")
+    vault.delete(f"md_{provider_id}")
+    market_router = MarketRouter()
+    return {"deleted": True}
 
 
 @app.get("/api/candles")
