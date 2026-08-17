@@ -44,6 +44,26 @@ disarmed, signals keep streaming. Restart restores the configured mode but
 - The AI analyst needs a local qwen2.5 model; without one it degrades to a
   clear "install me" hint — the app never downloads models.
 
+## Logs
+
+- `data/logs/access.log` / `data/logs/error.log` — uvicorn access + error
+  logs (rotating, 5 MB × 3 backups) plus console.
+- `data/logs/events.jsonl` — structured, sanitized event log (requests,
+  signals, orders, errors) with `requestId` for correlation; every HTTP
+  response carries the same id in `X-Request-Id`.
+- `data/` also holds `punch.db` (SQLite, WAL), the encrypted `vault.json`,
+  the key file `.secret`, and archived legacy JSONL under `data/archive/`.
+
+## Credential hygiene
+
+- Broker credentials live only in the Fernet-encrypted vault (`vault.json`,
+  key in `.secret`, both never shipped). The API never returns stored
+  secrets.
+- Rotate the at-rest key on demand: `POST /api/vault/rotate-key` (or the
+  popup button). Broker sessions stay valid; only the wrapping key changes.
+- Renew short-lived broker sessions via the popup *Connect* flows; arming is
+  always ephemeral (never persisted).
+
 ## Troubleshooting
 
 - **Orders 409 FEED_STALE** — feed not started yet; wait for bars

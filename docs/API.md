@@ -42,11 +42,16 @@ correlation. Every response carries `X-Request-Id`.
 | Method | Path |
 |---|---|
 | GET | `/api/signals/last` |
+| GET | `/api/signals/history?limit=&offset=` |
 | GET | `/api/strategies` |
 | GET | `/api/strategies/status` |
 | GET | `/api/strategies/leaderboard` |
 | POST | `/api/strategies/{id}/backtest` |
 | POST | `/api/research/{id}` |
+
+Paginated list endpoints (`limit` capped at 500, default 100 for signals,
+200 for ledger/order history) return `{total, limit, offset}` meta alongside
+the records.
 
 ### Trading
 | Method | Path | Notes |
@@ -54,7 +59,7 @@ correlation. Every response carries `X-Request-Id`.
 | POST | `/api/orders` | `{broker, signalId?, clientRequestId?, symbol?, side, qty, entry?, targetPrice?, stopLoss?}` — idempotent per signal/clientRequestId |
 | GET | `/api/positions` | open positions per broker |
 | GET | `/api/fills` | recent fills |
-| GET | `/api/execution/ledger` | order ledger |
+| GET | `/api/execution/ledger?limit=&offset=` | order ledger |
 | GET | `/api/execution/trades` | closed trades |
 | POST | `/api/execution/reconcile` | reconcile a broker; gates live orders |
 | GET | `/api/execution/reconciliation` | reconcile all connected brokers |
@@ -81,6 +86,7 @@ correlation. Every response carries `X-Request-Id`.
 | POST | `/api/broker/{name}/save` / `/api/broker/{name}/connect` | vault-stored credentials (Fernet) |
 | GET | `/api/broker/status` | connected adapters |
 | POST | `/api/broker/{name}/orders/close` | manual close |
+| POST | `/api/vault/rotate-key` | re-encrypt vault under a fresh key |
 
 ### Versioned aliases
 `/api/v1/strategies`, `/api/v1/signals/last`, `/api/v1/risk/state`,

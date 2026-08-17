@@ -120,6 +120,18 @@ within 5 s of connecting. See `docs/SECURITY.md`.
 
 Tests: `python -m pytest backend/tests -q` (also runs in CI on push).
 
+Quality gates before every release:
+
+```powershell
+cd backend
+python -m pytest tests -q            # full suite (208 tests)
+ruff check .                          # lint
+ruff format --check .                 # formatting
+```
+
+Runs on GitHub Actions too (`.github/workflows/ci.yml`): lint + tests with a
+coverage artifact on every push to `master` / pull request.
+
 ## Connect real brokers (all free)
 
 ### Zerodha Kite (India, NSE/BSE)

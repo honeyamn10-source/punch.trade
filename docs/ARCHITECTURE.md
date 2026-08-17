@@ -40,7 +40,7 @@ Close  ──▶ on_position_close ──▶ analytics ledger (data/positions.js
 | `vault.py`   | encrypted broker-session store (`.secret` key, `data/vault.json`) |
 | `proxy.py`   | `/v1` OpenAI-compatible → Ollama native proxy (thinking disabled) |
 
-## API surface (v0.2.0)
+## API surface (v0.3.0)
 
 REST auth: `X-Punch-Token: <token>` header (never query strings). WS auth:
 `{"type":"auth","token":...}` within 5s of connect, else close 4401.
