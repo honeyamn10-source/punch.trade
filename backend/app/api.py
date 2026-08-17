@@ -308,6 +308,7 @@ def strategies(_: None = Depends(require_token)) -> dict:
 
 
 _leaderboard_cache: Dict[str, dict] = {}
+_status_cache: Dict[str, dict] = {}
 
 
 @app.get("/api/strategies/leaderboard")
@@ -414,6 +415,38 @@ def run_research(strategy_id: str, req: ResearchReq,
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     return {"source": req.broker, **report}
+
+
+@app.get("/api/strategies/status")
+def strategy_statuses(_: None = Depends(require_token)) -> dict:
+    """Lifecycle status + composite score per strategy (research cached
+    10 min; drift fed by the execution layer)."""
+    from .research import ResearchConfig, research_report
+    from .strategy_status import compute_status
+    now = time.time()
+    if _status_cache and now - _status_cache.get("ts", 0) < 600:
+        return _status_cache
+    adapter = brokers.adapters["paper"]
+    rows = []
+    for s in STRATEGIES:
+        research = None
+        try:
+            bars = adapter.get_historical_bars(s["symbol"], "5m", 30)
+            research = research_report(s, bars, ResearchConfig())
+        except Exception:
+            research = None
+        st = compute_status(s["id"], s.get("status", "DRAFT"),
+                            has_backtest=True, research=research, drift=None)
+        rows.append({
+            "id": s["id"], "name": s["name"], "symbol": s["symbol"],
+            "status": st["status"], "reason": st["reason"],
+            "score": st["score"], "canPromoteTo": st["canPromoteTo"],
+            "qualityGate": (research or {}).get("qualityGate"),
+        })
+    result = {"ts": now, "rows": rows}
+    _status_cache.clear()
+    _status_cache.update(result)
+    return result
 
 
 @app.post("/api/broker/kite/login-url")
