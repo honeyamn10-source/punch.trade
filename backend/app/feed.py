@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
+from contextlib import suppress
 
 from . import config
 from .engine import StrategyRunner
-from .market import Candle, DataQualityTracker, MarketDataError, normalize_timeframe
+from .market import Candle, DataQualityTracker, MarketDataError
 
 
 class CandleBuilder:
@@ -26,15 +27,21 @@ class CandleBuilder:
 
     def __init__(self, interval: float):
         self.interval = interval
-        self._candle: Optional[dict] = None
+        self._candle: dict | None = None
 
-    def add_tick(self, ts: float, price: float, volume: float = 0.0) -> Optional[dict]:
+    def add_tick(self, ts: float, price: float, volume: float = 0.0) -> dict | None:
         """Returns a completed candle when one closes."""
         bucket = int(ts // self.interval) * self.interval
         if self._candle is None or self._candle["ts"] != bucket:
             done = self._candle
-            self._candle = {"ts": bucket, "open": price, "high": price,
-                            "low": price, "close": price, "volume": volume}
+            self._candle = {
+                "ts": bucket,
+                "open": price,
+                "high": price,
+                "low": price,
+                "close": price,
+                "volume": volume,
+            }
             return done
         c = self._candle
         c["high"] = max(c["high"], price)
@@ -47,25 +54,29 @@ class CandleBuilder:
 class LiveFeed:
     """Owns per-symbol bar series and feeds the strategy runners."""
 
-    def __init__(self, broker, runners: Dict[str, StrategyRunner],
-                 on_signal: Callable[[dict], None],
-                 on_position_close: Optional[Callable[[dict], None]] = None,
-                 candle_interval: float = 60.0):
+    def __init__(
+        self,
+        broker,
+        runners: dict[str, StrategyRunner],
+        on_signal: Callable[[dict], None],
+        on_position_close: Callable[[dict], None] | None = None,
+        candle_interval: float = 60.0,
+    ):
         self.broker = broker
         self.runners = runners
         self.on_signal = on_signal
         self.on_position_close = on_position_close or (lambda p: None)
         self.candle_interval = candle_interval
-        self.bars: Dict[str, List[dict]] = {}
-        self.last_ts: Dict[str, float] = {}  # symbol -> last ingested bar ts
-        self.last_closed_ts: Dict[str, float] = {}
-        self.last_error: Dict[str, str] = {}  # symbol -> last poll error
+        self.bars: dict[str, list[dict]] = {}
+        self.last_ts: dict[str, float] = {}  # symbol -> last ingested bar ts
+        self.last_closed_ts: dict[str, float] = {}
+        self.last_error: dict[str, str] = {}  # symbol -> last poll error
         self.quality = DataQualityTracker()
         self.reconnect_count = 0
         self.timeframe = "5m"
-        self._tasks: List[asyncio.Task] = []
-        self._last_ohlcv_ts: Dict[str, float] = {}
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._tasks: list[asyncio.Task] = []
+        self._last_ohlcv_ts: dict[str, float] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._kite_ticker = None
 
     # ---- public ---------------------------------------------------------
@@ -82,48 +93,52 @@ class LiveFeed:
         for t in self._tasks:
             t.cancel()
         if self._kite_ticker is not None:
-            try:
+            with suppress(Exception):
                 self._kite_ticker.close()
-            except Exception:
-                pass
 
-    def symbols(self) -> List[str]:
+    def symbols(self) -> list[str]:
         return sorted({r.strategy["symbol"] for r in self.runners.values()})
 
-    def health(self) -> List[dict]:
+    def health(self) -> list[dict]:
         """Per-symbol feed health for /api/system/status and the dashboard."""
         now = time.time()
         out = []
         for symbol in self.symbols():
             last = self.last_ts.get(symbol, 0.0)
-            stale_after = (config.LIVE_FEED_STALE_AFTER
-                           if self.broker.name != "paper" else config.FEED_STALE_AFTER)
+            stale_after = (
+                config.LIVE_FEED_STALE_AFTER
+                if self.broker.name != "paper"
+                else config.FEED_STALE_AFTER
+            )
             q = self.quality.status(symbol)
-            out.append({
-                "symbol": symbol,
-                "source": self.broker.name,
-                "synthetic": self.broker.name == "paper",
-                "bars": len(self.bars.get(symbol, [])),
-                "lastBarAgeSec": round(now - last, 1) if last else None,
-                "lastClosedCandleTs": self.last_closed_ts.get(symbol),
-                "stale": bool(last) and (now - last) > stale_after,
-                "quality": q,
-                "reconnectCount": self.reconnect_count,
-                "lastError": self.last_error.get(symbol),
-                **self.quality.summary(symbol),
-            })
+            out.append(
+                {
+                    "symbol": symbol,
+                    "source": self.broker.name,
+                    "synthetic": self.broker.name == "paper",
+                    "bars": len(self.bars.get(symbol, [])),
+                    "lastBarAgeSec": round(now - last, 1) if last else None,
+                    "lastClosedCandleTs": self.last_closed_ts.get(symbol),
+                    "stale": bool(last) and (now - last) > stale_after,
+                    "quality": q,
+                    "reconnectCount": self.reconnect_count,
+                    "lastError": self.last_error.get(symbol),
+                    **self.quality.summary(symbol),
+                }
+            )
         return out
 
     # ---- candle ingestion -----------------------------------------------
-    def ingest_bar(self, symbol: str, bar: dict, source: Optional[str] = None) -> None:
+    def ingest_bar(self, symbol: str, bar: dict, source: str | None = None) -> None:
         """Canonical path: any provider bar -> validated Candle -> engine.
 
         Corrupted candles are quarantined (counted, dropped) instead of
         being fed to strategies.
         """
         try:
-            c = Candle.from_legacy_bar(symbol, bar, timeframe=self.timeframe,
-                                       source=source or self.broker.name)
+            c = Candle.from_legacy_bar(
+                symbol, bar, timeframe=self.timeframe, source=source or self.broker.name
+            )
             c.validate()
         except (MarketDataError, KeyError, TypeError, ValueError) as e:
             self.quality.mark_invalid(symbol)
@@ -143,7 +158,7 @@ class LiveFeed:
             for closed in self.broker.on_bar(symbol, bar):
                 self.on_position_close(closed)
 
-    def _evaluate(self, symbol: str, series: List[dict]) -> None:
+    def _evaluate(self, symbol: str, series: list[dict]) -> None:
         for runner in self.runners.values():
             if runner.strategy["symbol"] != symbol:
                 continue
@@ -155,10 +170,9 @@ class LiveFeed:
     async def _paper_loop(self) -> None:
         for symbol in self.symbols():
             try:
-                bars = await asyncio.to_thread(
-                    self.broker.get_historical_bars, symbol, "5m", 30)
+                bars = await asyncio.to_thread(self.broker.get_historical_bars, symbol, "5m", 30)
                 if bars:
-                    self.bars[symbol] = bars[-config.MAX_BARS_KEPT:]
+                    self.bars[symbol] = bars[-config.MAX_BARS_KEPT :]
                     self.last_ts[symbol] = bars[-1]["ts"]
             except Exception as e:
                 self.last_error[symbol] = str(e)[:200]
@@ -170,34 +184,36 @@ class LiveFeed:
                     continue
                 prev = series[-1]["close"]
                 import random
+
                 drift = 0.0003
                 close = max(1.0, prev * (1 + drift + random.gauss(0, 0.006)))
-                bar = {"ts": time.time(), "open": prev,
-                       "high": max(prev, close) * (1 + abs(random.gauss(0, 0.003))),
-                       "low": min(prev, close) * (1 - abs(random.gauss(0, 0.003))),
-                       "close": close,
-                       "volume": random.randint(1000, 40000)}
+                bar = {
+                    "ts": time.time(),
+                    "open": prev,
+                    "high": max(prev, close) * (1 + abs(random.gauss(0, 0.003))),
+                    "low": min(prev, close) * (1 - abs(random.gauss(0, 0.003))),
+                    "close": close,
+                    "volume": random.randint(1000, 40000),
+                }
                 self.ingest_bar(symbol, bar, source="paper-synthetic")
 
     # ---- binance --------------------------------------------------------
     async def _binance_loop(self) -> None:
         for symbol in self.symbols():
             try:
-                bars = await asyncio.to_thread(
-                    self.broker.get_historical_bars, symbol, "1m", 1)
+                bars = await asyncio.to_thread(self.broker.get_historical_bars, symbol, "1m", 1)
                 for b in bars:
                     if self._last_ohlcv_ts.get(symbol, 0) < b["ts"]:
                         self._last_ohlcv_ts[symbol] = b["ts"]
                 if bars:
-                    self._prime(symbol, bars[-config.MAX_BARS_KEPT:])
+                    self._prime(symbol, bars[-config.MAX_BARS_KEPT :])
             except Exception as e:
                 self.last_error[symbol] = str(e)[:200]
         while True:
             await asyncio.sleep(15)
             for symbol in self.symbols():
                 try:
-                    rows = await asyncio.to_thread(
-                        self.broker.get_historical_bars, symbol, "1m", 1)
+                    rows = await asyncio.to_thread(self.broker.get_historical_bars, symbol, "1m", 1)
                     for b in rows:
                         if self._last_ohlcv_ts.get(symbol, 0) < b["ts"]:
                             self._last_ohlcv_ts[symbol] = b["ts"]
@@ -205,7 +221,7 @@ class LiveFeed:
                 except Exception as e:
                     self.last_error[symbol] = str(e)[:200]
 
-    def _prime(self, symbol: str, bars: List[dict]) -> None:
+    def _prime(self, symbol: str, bars: list[dict]) -> None:
         self.bars[symbol] = bars
 
     # ---- kite -----------------------------------------------------------
@@ -213,7 +229,7 @@ class LiveFeed:
         from kiteconnect import KiteTicker
 
         await asyncio.sleep(0.5)
-        builders: Dict[str, CandleBuilder] = {}
+        builders: dict[str, CandleBuilder] = {}
         try:
             instruments = self.broker._kite.instruments("NSE")
         except Exception as e:
@@ -232,10 +248,9 @@ class LiveFeed:
         # prime with recent candles so indicators are warm before live ticks
         for symbol in self.symbols():
             try:
-                bars = await asyncio.to_thread(
-                    self.broker.get_historical_bars, symbol, "1m", 1)
+                bars = await asyncio.to_thread(self.broker.get_historical_bars, symbol, "1m", 1)
                 if bars:
-                    self.bars[symbol] = bars[-config.MAX_BARS_KEPT:]
+                    self.bars[symbol] = bars[-config.MAX_BARS_KEPT :]
             except Exception:
                 pass
 
@@ -245,9 +260,13 @@ class LiveFeed:
                 if price is None:
                     continue
                 for symbol, builder in builders.items():
-                    done = builder.add_tick(t.get("timestamp", time.time()) / 1000
-                                            if t.get("timestamp") else time.time(),
-                                            price, t.get("volume", 0))
+                    done = builder.add_tick(
+                        t.get("timestamp", time.time()) / 1000
+                        if t.get("timestamp")
+                        else time.time(),
+                        price,
+                        t.get("volume", 0),
+                    )
                     if done is not None:
                         self._loop.call_soon_threadsafe(self.ingest_bar, symbol, done)
 

@@ -14,35 +14,67 @@ defaults.
 from __future__ import annotations
 
 import copy
-from typing import Dict, List, Optional
 
 # per-strategy metadata: family / warmup / timeframes / status / reason
-_META: Dict[str, Dict] = {
-    "rsi-reversal": {"family": "mean-reversion", "warmup_bars": 15,
-                     "reason": "RSI({period}) crossed below {value} — oversold bounce setup"},
-    "ema-breakout": {"family": "trend", "warmup_bars": 21,
-                     "reason": "close crossed above EMA({period}) — momentum breakout"},
-    "sma-bounce": {"family": "trend", "warmup_bars": 51,
-                   "reason": "close crossed above SMA({period}) — bounce off support"},
-    "btc-rsi": {"family": "mean-reversion", "warmup_bars": 15,
-                "reason": "RSI({period}) crossed below {value} on BTC — dip buy"},
-    "macd-momentum": {"family": "momentum", "warmup_bars": 35,
-                      "reason": "MACD histogram crossed above 0 — momentum shift"},
-    "bb-reversion": {"family": "mean-reversion", "warmup_bars": 21,
-                     "reason": "close reclaimed the lower Bollinger band({period})"},
-    "donchian-breakout": {"family": "breakout", "warmup_bars": 21,
-                          "reason": "close broke the {period}-bar Donchian high — turtle breakout"},
-    "vwap-reversion": {"family": "mean-reversion", "warmup_bars": 21,
-                       "reason": "price dipped below rolling VWAP({period}) — reversion entry"},
-    "golden-cross": {"family": "trend", "warmup_bars": 51,
-                     "reason": "SMA(20) crossed above SMA(50) — golden cross"},
-    "stoch-reversal": {"family": "mean-reversion", "warmup_bars": 18,
-                       "reason": "Stochastic({period}) crossed below 20 — oversold snap-back"},
-    "adx-trend": {"family": "trend", "warmup_bars": 28,
-                  "reason": "ADX({period}) crossed above 25 — strong trend confirmed"},
+_META: dict[str, dict] = {
+    "rsi-reversal": {
+        "family": "mean-reversion",
+        "warmup_bars": 15,
+        "reason": "RSI({period}) crossed below {value} — oversold bounce setup",
+    },
+    "ema-breakout": {
+        "family": "trend",
+        "warmup_bars": 21,
+        "reason": "close crossed above EMA({period}) — momentum breakout",
+    },
+    "sma-bounce": {
+        "family": "trend",
+        "warmup_bars": 51,
+        "reason": "close crossed above SMA({period}) — bounce off support",
+    },
+    "btc-rsi": {
+        "family": "mean-reversion",
+        "warmup_bars": 15,
+        "reason": "RSI({period}) crossed below {value} on BTC — dip buy",
+    },
+    "macd-momentum": {
+        "family": "momentum",
+        "warmup_bars": 35,
+        "reason": "MACD histogram crossed above 0 — momentum shift",
+    },
+    "bb-reversion": {
+        "family": "mean-reversion",
+        "warmup_bars": 21,
+        "reason": "close reclaimed the lower Bollinger band({period})",
+    },
+    "donchian-breakout": {
+        "family": "breakout",
+        "warmup_bars": 21,
+        "reason": "close broke the {period}-bar Donchian high — turtle breakout",
+    },
+    "vwap-reversion": {
+        "family": "mean-reversion",
+        "warmup_bars": 21,
+        "reason": "price dipped below rolling VWAP({period}) — reversion entry",
+    },
+    "golden-cross": {
+        "family": "trend",
+        "warmup_bars": 51,
+        "reason": "SMA(20) crossed above SMA(50) — golden cross",
+    },
+    "stoch-reversal": {
+        "family": "mean-reversion",
+        "warmup_bars": 18,
+        "reason": "Stochastic({period}) crossed below 20 — oversold snap-back",
+    },
+    "adx-trend": {
+        "family": "trend",
+        "warmup_bars": 28,
+        "reason": "ADX({period}) crossed above 25 — strong trend confirmed",
+    },
 }
 
-STRATEGIES: List[Dict] = [
+STRATEGIES: list[dict] = [
     {
         "id": "rsi-reversal",
         "name": "RSI Reversal",
@@ -104,8 +136,18 @@ STRATEGIES: List[Dict] = [
         "symbol": "INFY",
         "interval": "5m",
         "description": "Fade the overshoot: buy when close reclaims the lower Bollinger band, exit at the middle band.",
-        "entry": {"indicator": "BB_LOWER", "period": 20, "condition": "crosses_above", "value": "self"},
-        "exit": {"indicator": "BB_MID", "period": 20, "condition": "crosses_below", "value": "self"},
+        "entry": {
+            "indicator": "BB_LOWER",
+            "period": 20,
+            "condition": "crosses_above",
+            "value": "self",
+        },
+        "exit": {
+            "indicator": "BB_MID",
+            "period": 20,
+            "condition": "crosses_below",
+            "value": "self",
+        },
         "tp_levels": [1.0, 2.0],
         "sl_pct": 1.0,
     },
@@ -115,8 +157,18 @@ STRATEGIES: List[Dict] = [
         "symbol": "TCS",
         "interval": "5m",
         "description": "The turtle system: buy a 20-bar high breakout, exit on a 10-bar low breakdown.",
-        "entry": {"indicator": "DONCH_HIGH", "period": 20, "condition": "crosses_above", "value": "self"},
-        "exit": {"indicator": "DONCH_LOW", "period": 10, "condition": "crosses_below", "value": "self"},
+        "entry": {
+            "indicator": "DONCH_HIGH",
+            "period": 20,
+            "condition": "crosses_above",
+            "value": "self",
+        },
+        "exit": {
+            "indicator": "DONCH_LOW",
+            "period": 10,
+            "condition": "crosses_below",
+            "value": "self",
+        },
         "tp_levels": [1.5, 3.0],
         "sl_pct": 1.2,
     },
@@ -137,8 +189,18 @@ STRATEGIES: List[Dict] = [
         "symbol": "BTC/USDT",
         "interval": "5m",
         "description": "The classic trend filter: SMA(20) crossing above SMA(50). Exit on the death cross.",
-        "entry": {"indicator": "SMA", "period": 20, "condition": "crosses_above", "value": {"indicator": "SMA", "period": 50}},
-        "exit": {"indicator": "SMA", "period": 20, "condition": "crosses_below", "value": {"indicator": "SMA", "period": 50}},
+        "entry": {
+            "indicator": "SMA",
+            "period": 20,
+            "condition": "crosses_above",
+            "value": {"indicator": "SMA", "period": 50},
+        },
+        "exit": {
+            "indicator": "SMA",
+            "period": 20,
+            "condition": "crosses_below",
+            "value": {"indicator": "SMA", "period": 50},
+        },
         "tp_levels": [2.0, 4.0],
         "sl_pct": 1.5,
     },
@@ -167,14 +229,14 @@ STRATEGIES: List[Dict] = [
 ]
 
 
-def get_strategy(strategy_id: str) -> Optional[Dict]:
+def get_strategy(strategy_id: str) -> dict | None:
     for s in STRATEGIES:
         if s["id"] == strategy_id:
             return s
     return None
 
 
-def strategy_metadata(strategy: Dict) -> Dict:
+def strategy_metadata(strategy: dict) -> dict:
     """Merge identity/metadata fields into a strategy (never mutates)."""
     meta = _META.get(strategy["id"], {})
     return {
@@ -190,7 +252,7 @@ def strategy_metadata(strategy: Dict) -> Dict:
     }
 
 
-def parameter_snapshot(strategy: Dict) -> Dict:
+def parameter_snapshot(strategy: dict) -> dict:
     """Exact tunable parameters at signal/backtest time.
 
     Persisted with every signal/backtest/trade — historical objects must
@@ -207,12 +269,12 @@ def parameter_snapshot(strategy: Dict) -> Dict:
     return snap
 
 
-def strategy_id(strategy: Dict) -> str:
+def strategy_id(strategy: dict) -> str:
     """Canonical identity: id@version."""
     return f"{strategy['id']}@{strategy.get('version', '1.0.0')}"
 
 
-def target_levels(strategy: Dict) -> List[float]:
+def target_levels(strategy: dict) -> list[float]:
     """Multi-level take-profit percentages. Defaults to the single tp_pct."""
     levels = strategy.get("tp_levels")
     if isinstance(levels, list) and levels:
@@ -220,7 +282,7 @@ def target_levels(strategy: Dict) -> List[float]:
     return [float(strategy.get("tp_pct", 2.0))]
 
 
-def compute_indicator(indicator: str, period: int, bars: List[dict]) -> List[Optional[float]]:
+def compute_indicator(indicator: str, period: int, bars: list[dict]) -> list[float | None]:
     """Evaluate the indicator library against a bar series.
 
     Composite indicators (MACD hist, BB bands, Donchian channels, VWAP)
@@ -258,9 +320,13 @@ def compute_indicator(indicator: str, period: int, bars: List[dict]) -> List[Opt
     raise ValueError(f"Unknown indicator: {indicator}")
 
 
-def condition_met(condition: Dict, series: List[Optional[float]], index: int,
-                  closes_series: Optional[List[float]] = None,
-                  bars: Optional[List[dict]] = None) -> bool:
+def condition_met(
+    condition: dict,
+    series: list[float | None],
+    index: int,
+    closes_series: list[float] | None = None,
+    bars: list[dict] | None = None,
+) -> bool:
     """Check a declarative condition at `index`.
 
     `value == "self"` compares the indicator series to the close series
@@ -268,13 +334,16 @@ def condition_met(condition: Dict, series: List[Optional[float]], index: int,
     indicator series and tests a cross between the two (e.g. SMA20
     crossing SMA50 — golden cross). Otherwise the level is a fixed number.
     """
-    return explain_condition(condition, series, index,
-                             closes_series, bars)["passed"]
+    return explain_condition(condition, series, index, closes_series, bars)["passed"]
 
 
-def explain_condition(condition: Dict, series: List[Optional[float]], index: int,
-                      closes_series: Optional[List[float]] = None,
-                      bars: Optional[List[dict]] = None) -> Dict:
+def explain_condition(
+    condition: dict,
+    series: list[float | None],
+    index: int,
+    closes_series: list[float] | None = None,
+    bars: list[dict] | None = None,
+) -> dict:
     """Like condition_met but returns a structured explanation:
     {name, value, operator, threshold, passed} — the "why did this fire"
     payload for signals and the dashboard.
@@ -287,22 +356,31 @@ def explain_condition(condition: Dict, series: List[Optional[float]], index: int
     op = "crosses_above" if condition.get("condition") == "crosses_above" else "crosses_below"
 
     def result(value, threshold, passed):
-        return {"name": f"{indicator}({period})", "value": value,
-                "operator": op, "threshold": threshold, "passed": passed}
+        return {
+            "name": f"{indicator}({period})",
+            "value": value,
+            "operator": op,
+            "threshold": threshold,
+            "passed": passed,
+        }
 
     if isinstance(level, dict):
         other = compute_indicator(level["indicator"], level["period"], bars or [])
         if len(other) <= index or any(
-                v is None for v in (series[index - 1], series[index],
-                                    other[index - 1], other[index])):
+            v is None for v in (series[index - 1], series[index], other[index - 1], other[index])
+        ):
             return result(None, f"{level['indicator']}({level['period']})", False)
         if op == "crosses_above":
-            return result(round(series[index], 4),
-                          f"{level['indicator']}({level['period']})={round(other[index], 4)}",
-                          series[index - 1] <= other[index - 1] and series[index] > other[index])
-        return result(round(series[index], 4),
-                      f"{level['indicator']}({level['period']})={round(other[index], 4)}",
-                      series[index - 1] >= other[index - 1] and series[index] < other[index])
+            return result(
+                round(series[index], 4),
+                f"{level['indicator']}({level['period']})={round(other[index], 4)}",
+                series[index - 1] <= other[index - 1] and series[index] > other[index],
+            )
+        return result(
+            round(series[index], 4),
+            f"{level['indicator']}({level['period']})={round(other[index], 4)}",
+            series[index - 1] >= other[index - 1] and series[index] < other[index],
+        )
     if level == "self":
         if closes_series is None:
             return result(None, "close", False)
@@ -311,12 +389,24 @@ def explain_condition(condition: Dict, series: List[Optional[float]], index: int
         if None in (ind_prev, ind_cur):
             return result(None, f"close={round(c_cur, 4) if c_cur is not None else '?'}", False)
         if op == "crosses_above":
-            return result(round(c_cur, 4), f"{indicator}({period})={round(ind_cur, 4)}",
-                          c_prev <= ind_prev and c_cur > ind_cur)
-        return result(round(c_cur, 4), f"{indicator}({period})={round(ind_cur, 4)}",
-                      c_prev >= ind_prev and c_cur < ind_cur)
+            return result(
+                round(c_cur, 4),
+                f"{indicator}({period})={round(ind_cur, 4)}",
+                c_prev <= ind_prev and c_cur > ind_cur,
+            )
+        return result(
+            round(c_cur, 4),
+            f"{indicator}({period})={round(ind_cur, 4)}",
+            c_prev >= ind_prev and c_cur < ind_cur,
+        )
     if op == "crosses_below":
-        return result(round(series[index], 4) if series[index] is not None else None,
-                      level, indicators.crossed_below(series, index, level))
-    return result(round(series[index], 4) if series[index] is not None else None,
-                  level, indicators.crossed_above(series, index, level))
+        return result(
+            round(series[index], 4) if series[index] is not None else None,
+            level,
+            indicators.crossed_below(series, index, level),
+        )
+    return result(
+        round(series[index], 4) if series[index] is not None else None,
+        level,
+        indicators.crossed_above(series, index, level),
+    )

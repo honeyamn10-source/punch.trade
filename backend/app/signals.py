@@ -1,4 +1,4 @@
-"""Canonical signal model + state machine.
+r"""Canonical signal model + state machine.
 
 Lifecycle:
 
@@ -15,8 +15,6 @@ Signal identity is deterministic (strategy_id + version + symbol + timeframe
 
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 # ------------------------------------------------------------- states ----
 CANDIDATE = "CANDIDATE"
 ACTIVE = "ACTIVE"
@@ -29,7 +27,7 @@ REJECTED = "REJECTED"
 
 TERMINAL = {CLOSED, INVALIDATED, EXPIRED, REJECTED}
 
-_TRANSITIONS: Dict[str, set] = {
+_TRANSITIONS: dict[str, set] = {
     CANDIDATE: {ACTIVE, EXPIRED, INVALIDATED},
     ACTIVE: {EXECUTED, PARTIAL, CLOSED, EXPIRED, INVALIDATED, REJECTED},
     EXECUTED: {PARTIAL, CLOSED, INVALIDATED},
@@ -61,7 +59,7 @@ def is_terminal(state: str) -> bool:
 
 
 # ------------------------------------------------------------- helpers ----
-def with_status(signal: Dict, new_status: str, **extra) -> Dict:
+def with_status(signal: dict, new_status: str, **extra) -> dict:
     """Return a copy of the signal dict with a validated status change."""
     current = signal.get("status", ACTIVE)
     transition(current, new_status)
@@ -71,15 +69,16 @@ def with_status(signal: Dict, new_status: str, **extra) -> Dict:
     return out
 
 
-def expired_at(signal: Dict, ttl_seconds: float) -> Optional[float]:
+def expired_at(signal: dict, ttl_seconds: float) -> float | None:
     """expires_at for a signal (None if TTL is disabled/<= 0)."""
     if ttl_seconds <= 0:
         return None
     return (signal.get("ts") or 0) + ttl_seconds
 
 
-def is_expired(signal: Dict, now: Optional[float] = None) -> bool:
+def is_expired(signal: dict, now: float | None = None) -> bool:
     import time
+
     now = now if now is not None else time.time()
     expires = signal.get("expiresAt")
     return expires is not None and now > expires

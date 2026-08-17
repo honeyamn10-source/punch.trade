@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 from cryptography.fernet import Fernet
 
@@ -33,26 +33,26 @@ def _load_key() -> bytes:
 _fernet = Fernet(_load_key())
 
 
-def _read_raw() -> Dict[str, Any]:
+def _read_raw() -> dict[str, Any]:
     if not os.path.exists(VAULT_PATH):
         return {}
     with open(VAULT_PATH, "rb") as f:
         return json.loads(_fernet.decrypt(f.read()).decode("utf-8"))
 
 
-def _write_raw(doc: Dict[str, Any]) -> None:
+def _write_raw(doc: dict[str, Any]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(VAULT_PATH, "wb") as f:
         f.write(_fernet.encrypt(json.dumps(doc).encode("utf-8")))
 
 
-def save(broker: str, creds: Dict[str, Any]) -> None:
+def save(broker: str, creds: dict[str, Any]) -> None:
     doc = _read_raw()
     doc[broker] = creds
     _write_raw(doc)
 
 
-def load(broker: str) -> Optional[Dict[str, Any]]:
+def load(broker: str) -> dict[str, Any] | None:
     return _read_raw().get(broker)
 
 

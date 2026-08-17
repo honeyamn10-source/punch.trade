@@ -3,8 +3,6 @@ explanations, regime tagging, and the anti-wedge fix (AUD-017)."""
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from app import config
@@ -15,9 +13,17 @@ from app.strategies import explain_condition, get_strategy
 
 
 def _bars(closes, start_ts=0):
-    return [{"ts": start_ts + i, "open": closes[i], "high": closes[i] * 1.01,
-             "low": closes[i] * 0.99, "close": closes[i],
-             "volume": 1000} for i in range(len(closes))]
+    return [
+        {
+            "ts": start_ts + i,
+            "open": closes[i],
+            "high": closes[i] * 1.01,
+            "low": closes[i] * 0.99,
+            "close": closes[i],
+            "volume": 1000,
+        }
+        for i in range(len(closes))
+    ]
 
 
 # ------------------------------------------------------ deterministic id --
@@ -45,8 +51,7 @@ def _signal_for(strategy_id, closes, start_ts=0):
 def _rsi_oversold_series():
     # long flat warmup, rally, then a drop deep enough that RSI(14) crosses
     # below 30 only after 60+ bars exist (regime classifier needs 60)
-    return ([100.0] * 40 + [108.0 + i for i in range(15)]
-            + [123.0 - i * 1.0 for i in range(45)])
+    return [100.0] * 40 + [108.0 + i for i in range(15)] + [123.0 - i * 1.0 for i in range(45)]
 
 
 # ----------------------------------------------------------- fields ----
@@ -62,8 +67,12 @@ def test_signal_carries_identity_and_snapshots():
     assert d["expiresAt"] > d["ts"]
     assert "parameterSnapshot" in d and d["parameterSnapshot"]["sl_pct"] == 1.0
     assert d["reason"] and "RSI" in d["reason"]
-    assert d["regime"] in ("TRENDING_HIGH_VOL", "TRENDING_LOW_VOL",
-                           "RANGING_HIGH_VOL", "RANGING_LOW_VOL")
+    assert d["regime"] in (
+        "TRENDING_HIGH_VOL",
+        "TRENDING_LOW_VOL",
+        "RANGING_HIGH_VOL",
+        "RANGING_LOW_VOL",
+    )
     assert d["candleClose"] > 0 and d["closeTime"] > 0
     assert d["indicatorSnapshot"]["passed"] is True
     assert d["indicatorSnapshot"]["operator"] == "crosses_below"
@@ -74,6 +83,7 @@ def test_signal_explanation_condition():
     closes = _rsi_oversold_series()
     bars = _bars(closes)
     from app.strategies import compute_indicator
+
     series = compute_indicator("RSI", 14, bars)
     # at the final bar RSI is deeply oversold — the *cross* fired earlier,
     # so a fixed-level comparison here should be simply "below"
@@ -86,8 +96,7 @@ def test_signal_explanation_condition():
     assert exp["operator"] == "crosses_below"
     assert isinstance(exp["value"], (int, float))
     # and a non-firing condition explains why
-    exp2 = explain_condition(strat["entry"], series, 25,
-                             [b["close"] for b in bars], bars)
+    exp2 = explain_condition(strat["entry"], series, 25, [b["close"] for b in bars], bars)
     assert exp2["passed"] is False
 
 
@@ -110,7 +119,10 @@ def test_state_machine_legal_and_illegal():
 
 def test_with_status_validation():
     s = {"status": "ACTIVE", "id": "x"}
-    assert sig_mod.with_status(s, "REJECTED", rejection="MAX_POSITIONS")["rejection"] == "MAX_POSITIONS"
+    assert (
+        sig_mod.with_status(s, "REJECTED", rejection="MAX_POSITIONS")["rejection"]
+        == "MAX_POSITIONS"
+    )
     with pytest.raises(sig_mod.SignalStateError):
         sig_mod.with_status(s, "CANDIDATE")
 
@@ -128,16 +140,23 @@ def test_regime_trending_and_ranging():
 def test_active_state_resets_after_timeout(monkeypatch):
     monkeypatch.setattr(config, "EXIT_TIMEOUT_BARS", 5)
     strategy = {
-        "id": "wedge-test", "name": "Wedge Test", "symbol": "X",
-        "interval": "5m", "description": "test",
-        "entry": {"indicator": "SMA", "period": 5, "condition": "crosses_above",
-                  "value": "self"},
-        "exit": {"indicator": "SMA", "period": 5, "condition": "crosses_above",
-                 "value": 99999.0},  # never fires
-        "tp_pct": 1.0, "sl_pct": 1.0,
+        "id": "wedge-test",
+        "name": "Wedge Test",
+        "symbol": "X",
+        "interval": "5m",
+        "description": "test",
+        "entry": {"indicator": "SMA", "period": 5, "condition": "crosses_above", "value": "self"},
+        "exit": {
+            "indicator": "SMA",
+            "period": 5,
+            "condition": "crosses_above",
+            "value": 99999.0,
+        },  # never fires
+        "tp_pct": 1.0,
+        "sl_pct": 1.0,
     }
     runner = StrategyRunner(strategy)
-    closes = [100.0] * 12 + [110.0] * 6   # entry fires at the jump
+    closes = [100.0] * 12 + [110.0] * 6  # entry fires at the jump
     first = None
     for i in range(1, len(closes)):
         s = runner.on_bar(_bars(closes[: i + 1]))

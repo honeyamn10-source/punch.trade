@@ -11,8 +11,7 @@ import math
 import pytest
 
 from app import indicators as ind
-from app.market import (Candle, DataQualityTracker, MarketDataError,
-                        TIMEFRAMES, normalize_timeframe)
+from app.market import Candle, DataQualityTracker, MarketDataError, normalize_timeframe
 
 
 def _bars(closes, highs=None, lows=None, opens=None, volumes=None):
@@ -21,8 +20,17 @@ def _bars(closes, highs=None, lows=None, opens=None, volumes=None):
     lows = lows or [c * 0.99 for c in closes]
     opens = opens or list(closes)
     volumes = volumes or [1000] * n
-    return [{"ts": i, "open": opens[i], "high": highs[i], "low": lows[i],
-             "close": closes[i], "volume": volumes[i]} for i in range(n)]
+    return [
+        {
+            "ts": i,
+            "open": opens[i],
+            "high": highs[i],
+            "low": lows[i],
+            "close": closes[i],
+            "volume": volumes[i],
+        }
+        for i in range(n)
+    ]
 
 
 # ---------------------------------------------------------- market model --
@@ -42,17 +50,28 @@ def test_candle_validation_ok():
     assert c.validate() is c
 
 
-@pytest.mark.parametrize("bad", [
-    dict(open=100, high=90, low=90, close=105),   # high < open
-    dict(open=100, high=110, low=120, close=105),  # low > close
-    dict(open=100, high=110, low=90, close=105, volume=-1),
-    dict(open=float("nan"), high=110, low=90, close=105),
-    dict(open=100, high=float("inf"), low=90, close=105),
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        dict(open=100, high=90, low=90, close=105),  # high < open
+        dict(open=100, high=110, low=120, close=105),  # low > close
+        dict(open=100, high=110, low=90, close=105, volume=-1),
+        dict(open=float("nan"), high=110, low=90, close=105),
+        dict(open=100, high=float("inf"), low=90, close=105),
+    ],
+)
 def test_candle_validation_rejects(bad):
-    c = Candle("X", "5m", 0, 300, bad.get("open", 100), bad.get("high", 110),
-               bad.get("low", 90), bad.get("close", 105),
-               bad.get("volume", 100))
+    c = Candle(
+        "X",
+        "5m",
+        0,
+        300,
+        bad.get("open", 100),
+        bad.get("high", 110),
+        bad.get("low", 90),
+        bad.get("close", 105),
+        bad.get("volume", 100),
+    )
     with pytest.raises(MarketDataError):
         c.validate()
 
@@ -63,9 +82,12 @@ def test_candle_close_time_must_exceed_open_time():
 
 
 def test_candle_from_legacy_bar():
-    c = Candle.from_legacy_bar("TCS", {"ts": 100, "open": 1, "high": 2,
-                                       "low": 0.5, "close": 1.5, "volume": 9},
-                               timeframe="5", source="paper-synthetic")
+    c = Candle.from_legacy_bar(
+        "TCS",
+        {"ts": 100, "open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 9},
+        timeframe="5",
+        source="paper-synthetic",
+    )
     assert c.timeframe == "5m"
     assert c.source == "paper-synthetic"
     assert c.closed is True
@@ -85,14 +107,17 @@ def test_data_quality_tracker():
 
 
 # ------------------------------------------------------------ indicators --
-@pytest.mark.parametrize("fn,args", [
-    (ind.sma, ([1, 2, 3], 2)),
-    (ind.ema, ([1, 2, 3], 2)),
-    (ind.rsi, ([1, 2, 3], 2)),
-    (ind.macd, ([1, 2, 3],)),
-    (ind.bollinger, ([1, 2, 3],)),
-    (ind.donchian, ([1, 2, 3],)),
-])
+@pytest.mark.parametrize(
+    "fn,args",
+    [
+        (ind.sma, ([1, 2, 3], 2)),
+        (ind.ema, ([1, 2, 3], 2)),
+        (ind.rsi, ([1, 2, 3], 2)),
+        (ind.macd, ([1, 2, 3],)),
+        (ind.bollinger, ([1, 2, 3],)),
+        (ind.donchian, ([1, 2, 3],)),
+    ],
+)
 def test_value_indicators_empty(fn, args):
     out = fn([], *args[1:])
     if isinstance(out, dict):
@@ -101,12 +126,15 @@ def test_value_indicators_empty(fn, args):
         assert out == []
 
 
-@pytest.mark.parametrize("fn,args", [
-    (ind.vwap, (_bars([1.0]),)),
-    (ind.atr, (_bars([1.0]),)),
-    (ind.stochastic, (_bars([1.0]),)),
-    (ind.adx, (_bars([1.0]),)),
-])
+@pytest.mark.parametrize(
+    "fn,args",
+    [
+        (ind.vwap, (_bars([1.0]),)),
+        (ind.atr, (_bars([1.0]),)),
+        (ind.stochastic, (_bars([1.0]),)),
+        (ind.adx, (_bars([1.0]),)),
+    ],
+)
 def test_bar_indicators_empty(fn, args):
     out = fn(args[0], *args[1:])
     assert out == [None]
@@ -123,8 +151,10 @@ def test_indicators_single_value_no_crash():
 
 def test_indicators_flat_prices():
     flat = [100.0] * 50
-    bars = [{"ts": i, "open": 100.0, "high": 100.0, "low": 100.0,
-             "close": 100.0, "volume": 1000} for i in range(50)]
+    bars = [
+        {"ts": i, "open": 100.0, "high": 100.0, "low": 100.0, "close": 100.0, "volume": 1000}
+        for i in range(50)
+    ]
     assert ind.sma(flat, 20)[-1] == 100.0
     assert ind.rsi(flat, 14)[-1] == 50.0  # neutral, not 100
     assert ind.stochastic(bars, 14)[-1] == 50.0

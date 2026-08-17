@@ -12,7 +12,6 @@ honest.
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional
 
 WIN = "WIN"
 LOSS = "LOSS"
@@ -30,8 +29,9 @@ def classify(net_pnl: float) -> str:
     return BREAKEVEN
 
 
-def trade_pnl(side: str, entry_price: float, exit_price: float,
-              qty: float, commission: float = 0.0) -> float:
+def trade_pnl(
+    side: str, entry_price: float, exit_price: float, qty: float, commission: float = 0.0
+) -> float:
     """Money PnL for a completed round trip (buy long / sell short)."""
     if side in ("buy", "long", "LONG"):
         gross = (exit_price - entry_price) * qty
@@ -42,8 +42,9 @@ def trade_pnl(side: str, entry_price: float, exit_price: float,
     return gross - commission
 
 
-def trade_pnl_pct(entry_price: float, exit_price: float,
-                  side: str = "buy", leverage: float = 1.0) -> float:
+def trade_pnl_pct(
+    entry_price: float, exit_price: float, side: str = "buy", leverage: float = 1.0
+) -> float:
     if entry_price <= 0:
         return 0.0
     if side in ("buy", "long", "LONG"):
@@ -51,7 +52,7 @@ def trade_pnl_pct(entry_price: float, exit_price: float,
     return (entry_price - exit_price) / entry_price * leverage
 
 
-def summary_stats(trades: List[dict]) -> Dict:
+def summary_stats(trades: list[dict]) -> dict:
     """All headline metrics from a list of completed-trade dicts.
 
     Every trade dict must carry: {"net_pnl": float (money),
@@ -64,12 +65,24 @@ def summary_stats(trades: List[dict]) -> Dict:
     """
     n = len(trades)
     if n == 0:
-        return {"trades": 0, "wins": 0, "losses": 0, "break_even": 0,
-                "win_rate": 0.0, "gross_profit": 0.0, "gross_loss": 0.0,
-                "net_pnl": 0.0, "profit_factor": 0.0, "avg_win": 0.0,
-                "avg_loss": 0.0, "expectancy": 0.0, "max_drawdown_pct": 0.0,
-                "max_consecutive_losses": 0, "avg_bars_held": 0.0,
-                "sharpe": 0.0}
+        return {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "break_even": 0,
+            "win_rate": 0.0,
+            "gross_profit": 0.0,
+            "gross_loss": 0.0,
+            "net_pnl": 0.0,
+            "profit_factor": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "expectancy": 0.0,
+            "max_drawdown_pct": 0.0,
+            "max_consecutive_losses": 0,
+            "avg_bars_held": 0.0,
+            "sharpe": 0.0,
+        }
 
     results = [(classify(t["net_pnl"]), t["net_pnl"], t["net_pnl_pct"]) for t in trades]
     wins = [r for r in results if r[0] == WIN]
@@ -115,7 +128,8 @@ def summary_stats(trades: List[dict]) -> Dict:
         "gross_profit": round(gross_profit, 2),
         "gross_loss": round(gross_loss, 2),
         "net_pnl": round(net, 2),
-        "profit_factor": round(gross_profit / gross_loss, 4) if gross_loss > 0
+        "profit_factor": round(gross_profit / gross_loss, 4)
+        if gross_loss > 0
         else (round(gross_profit, 4) if gross_profit > 0 else 0.0),
         "avg_win": round(avg_win, 2),
         "avg_loss": round(avg_loss, 2),

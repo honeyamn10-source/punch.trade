@@ -5,10 +5,20 @@ from __future__ import annotations
 
 import pytest
 
-from app.strategy_status import (BACKTESTED, DISABLED, DRAFT, LIVE_ACTIVE,
-                                 LIVE_DEGRADED, RESEARCHED, StatusError,
-                                 can_promote, composite_score, compute_status,
-                                 live_drift, transition)
+from app.strategy_status import (
+    BACKTESTED,
+    DISABLED,
+    DRAFT,
+    LIVE_ACTIVE,
+    LIVE_DEGRADED,
+    RESEARCHED,
+    StatusError,
+    can_promote,
+    composite_score,
+    compute_status,
+    live_drift,
+    transition,
+)
 
 
 def test_legal_promotions():
@@ -31,8 +41,10 @@ def test_disable_is_terminal():
 
 
 def test_composite_score_components_visible():
-    research = {"qualityGate": {"score": 80, "passed": True},
-                "parameterStability": {"stable": True}}
+    research = {
+        "qualityGate": {"score": 80, "passed": True},
+        "parameterStability": {"stable": True},
+    }
     c = composite_score(research, None)
     assert c["score"] == 78  # 0.6*80 + 0.2*100 + 0.2*50
     assert set(c["components"]) == {"qualityGate", "parameterStability", "liveDrift"}
@@ -45,22 +57,25 @@ def test_live_drift_detection():
     baseline = {"expectancy": 100.0}
     trades = [{"netPnl": 10.0, "netPnlPct": 0.1, "entryTs": 0, "exitTs": 1}] * 5
     d = live_drift(baseline, trades)
-    assert d["degraded"] is True       # 10 vs 100 -> ratio 0.1 < 0.5
+    assert d["degraded"] is True  # 10 vs 100 -> ratio 0.1 < 0.5
     assert d["health"] == 10.0
     ok = [{"netPnl": 90.0, "netPnlPct": 0.9, "entryTs": 0, "exitTs": 1}] * 5
     assert live_drift(baseline, ok)["degraded"] is False
 
 
 def test_live_drift_insufficient_data_is_neutral():
-    d = live_drift({"expectancy": 50.0},
-                   [{"netPnl": 5.0, "netPnlPct": 0.05, "entryTs": 0, "exitTs": 1}] * 2)
+    d = live_drift(
+        {"expectancy": 50.0}, [{"netPnl": 5.0, "netPnlPct": 0.05, "entryTs": 0, "exitTs": 1}] * 2
+    )
     assert d["degraded"] is False
     assert d["health"] == 50.0
 
 
 def test_compute_status_research_gate():
-    research = {"qualityGate": {"passed": True, "score": 90},
-                "parameterStability": {"stable": True}}
+    research = {
+        "qualityGate": {"passed": True, "score": 90},
+        "parameterStability": {"stable": True},
+    }
     st = compute_status("s1", DRAFT, has_backtest=True, research=research, drift=None)
     assert st["status"] == RESEARCHED
     assert st["score"]["score"] > 0
@@ -73,10 +88,10 @@ def test_compute_status_disabled_override():
 
 
 def test_compute_status_drift_degrades():
-    research = {"qualityGate": {"passed": True, "score": 90},
-                "parameterStability": {"stable": True}}
-    drift = {"degraded": True, "reason": "drift below threshold",
-             "trades": 10, "health": 10.0}
-    st = compute_status("s1", LIVE_ACTIVE, has_backtest=True,
-                        research=research, drift=drift)
+    research = {
+        "qualityGate": {"passed": True, "score": 90},
+        "parameterStability": {"stable": True},
+    }
+    drift = {"degraded": True, "reason": "drift below threshold", "trades": 10, "health": 10.0}
+    st = compute_status("s1", LIVE_ACTIVE, has_backtest=True, research=research, drift=drift)
     assert st["status"] == LIVE_DEGRADED

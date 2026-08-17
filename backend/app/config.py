@@ -2,12 +2,12 @@
 
 import os
 
-DATA_DIR = os.path.abspath(os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data"))
+DATA_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data")
+)
 
 # SQLite durable store (never committed to git; data/ is gitignored).
-DB_PATH = os.environ.get("PUNCH_DB_PATH",
-                         os.path.join(DATA_DIR, "punch.db"))
+DB_PATH = os.environ.get("PUNCH_DB_PATH", os.path.join(DATA_DIR, "punch.db"))
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -49,8 +49,7 @@ MAX_QTY = int(os.environ.get("PUNCH_MAX_QTY", 10000))
 # Daily realized-loss circuit: paper ledger, % of sum of closed pnl.
 MAX_DAILY_LOSS_PCT = float(os.environ.get("PUNCH_DAILY_LOSS_PCT", 5.0))
 # Feed is "stale" (orders rejected) when no bar arrived for this long.
-FEED_STALE_AFTER = float(os.environ.get("PUNCH_FEED_STALE_AFTER",
-                                        max(30.0, 5 * BAR_SECONDS)))
+FEED_STALE_AFTER = float(os.environ.get("PUNCH_FEED_STALE_AFTER", max(30.0, 5 * BAR_SECONDS)))
 # Real-broker feeds (binance/kite) poll less often: 3 minutes is fine.
 LIVE_FEED_STALE_AFTER = 180.0
 
@@ -58,6 +57,15 @@ LIVE_FEED_STALE_AFTER = 180.0
 # @BotFather, put the token + your chat id in these env vars.
 TELEGRAM_BOT_TOKEN = os.environ.get("PUNCH_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("PUNCH_TELEGRAM_CHAT_ID", "")
+
+# Test-safety tripwire: must stay false/unset in CI and normal runs. Only a
+# deliberate local live-broker integration test may set it true — no CI
+# workflow may ever set it (see docs/TESTING.md).
+ALLOW_LIVE_TESTS = os.environ.get("PUNCH_ALLOW_LIVE_TESTS", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 
 class ConfigError(ValueError):
@@ -82,7 +90,8 @@ def validate_config() -> None:
         raise ConfigError(
             "LIVE mode refused with the default demo token — set PUNCH_TOKEN "
             "to a strong value first (risk rule: no real orders with the "
-            "default token).")
+            "default token)."
+        )
 
 
 def startup_report() -> str:

@@ -20,8 +20,6 @@ The composite score is deliberately NOT win-rate-only:
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 DRAFT = "DRAFT"
 BACKTESTED = "BACKTESTED"
 RESEARCHED = "RESEARCHED"
@@ -56,7 +54,7 @@ def can_promote(current: str, to: str) -> bool:
 
 
 # --------------------------------------------------------- composite ----
-def composite_score(research: Optional[Dict], drift: Optional[Dict]) -> Dict:
+def composite_score(research: dict | None, drift: dict | None) -> dict:
     """0-100 score with visible components. research/qualityGate shape is
     research.py::quality_gate output; drift is live_drift() output."""
     quality = (research or {}).get("qualityGate", {})
@@ -81,8 +79,12 @@ def composite_score(research: Optional[Dict], drift: Optional[Dict]) -> Dict:
 
 
 # -------------------------------------------------------------- drift ----
-def live_drift(backtest_baseline: Dict, live_trades: List[dict],
-               min_trades: int = 3, degrade_ratio: float = 0.5) -> Dict:
+def live_drift(
+    backtest_baseline: dict,
+    live_trades: list[dict],
+    min_trades: int = 3,
+    degrade_ratio: float = 0.5,
+) -> dict:
     """Compare live expectancy vs backtest expectancy (per-trade).
 
     degrade_ratio: live expectancy below this fraction of baseline marks
@@ -90,16 +92,27 @@ def live_drift(backtest_baseline: Dict, live_trades: List[dict],
     """
     from . import pnl as pnl_mod
 
-    live_stats = pnl_mod.summary_stats([
-        {"net_pnl": t.get("netPnl", 0.0), "net_pnl_pct": t.get("netPnlPct", 0.0),
-         "entry_ts": t.get("entryTs", 0.0), "exit_ts": t.get("exitTs", 0.0)}
-        for t in live_trades])
+    live_stats = pnl_mod.summary_stats(
+        [
+            {
+                "net_pnl": t.get("netPnl", 0.0),
+                "net_pnl_pct": t.get("netPnlPct", 0.0),
+                "entry_ts": t.get("entryTs", 0.0),
+                "exit_ts": t.get("exitTs", 0.0),
+            }
+            for t in live_trades
+        ]
+    )
     base_exp = backtest_baseline.get("expectancy", 0.0)
     live_exp = live_stats["expectancy"]
 
     if live_stats["trades"] < min_trades or base_exp <= 0:
-        return {"trades": live_stats["trades"], "degraded": False,
-                "health": 50.0, "reason": "insufficient data"}
+        return {
+            "trades": live_stats["trades"],
+            "degraded": False,
+            "health": 50.0,
+            "reason": "insufficient data",
+        }
 
     ratio = live_exp / base_exp if base_exp else 0.0
     health = round(max(0.0, min(100.0, ratio * 100)), 1)
@@ -111,15 +124,18 @@ def live_drift(backtest_baseline: Dict, live_trades: List[dict],
         "ratio": round(ratio, 3),
         "health": health,
         "degraded": degraded,
-        "reason": ("drift below threshold"
-                   if degraded else "within threshold"),
+        "reason": ("drift below threshold" if degraded else "within threshold"),
     }
 
 
 # ------------------------------------------------------------ compute ----
-def compute_status(strategy_id: str, current_status: str,
-                   has_backtest: bool, research: Optional[Dict],
-                   drift: Optional[Dict]) -> Dict:
+def compute_status(
+    strategy_id: str,
+    current_status: str,
+    has_backtest: bool,
+    research: dict | None,
+    drift: dict | None,
+) -> dict:
     """Derive the strategy's status from evidence, applying legal
     transitions. Returns {status, score, reason, canPromoteTo}."""
     new_status = current_status
@@ -138,15 +154,13 @@ def compute_status(strategy_id: str, current_status: str,
             else:
                 reason = "research gate passed"
         else:
-            reason = ("research gate not passed"
-                      if research else "no research report yet")
+            reason = "research gate not passed" if research else "no research report yet"
     if drift and drift.get("degraded") and new_status in (LIVE_ACTIVE, RESEARCHED, BACKTESTED):
         new_status, reason = LIVE_DEGRADED, f"drift: {drift.get('reason')}"
 
     score = composite_score(research, drift)
     ladder_pos = STATUS_LADDER.index(new_status)
-    promotable = [s for s in STATUS_LADDER
-                  if can_promote(new_status, s)]
+    promotable = [s for s in STATUS_LADDER if can_promote(new_status, s)]
     return {
         "strategyId": strategy_id,
         "status": new_status,

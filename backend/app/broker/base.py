@@ -9,7 +9,6 @@ rest of the system.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
 
 
 class BrokerError(Exception):
@@ -20,27 +19,35 @@ class BrokerAdapter(ABC):
     name: str = "base"
 
     @abstractmethod
-    def status(self) -> Dict:
+    def status(self) -> dict:
         """Connection/auth status + account summary."""
 
     @abstractmethod
-    def get_historical_bars(self, symbol: str, interval: str, days: int) -> List[dict]:
+    def get_historical_bars(self, symbol: str, interval: str, days: int) -> list[dict]:
         """Real historical OHLCV bars, oldest first. interval like "5minute" or "5m"."""
 
     @abstractmethod
-    def place_bracket(self, symbol: str, side: str, qty: int,
-                      entry: float, target: float, stop: float,
-                      market: bool = True, price: Optional[float] = None,
-                      targets: Optional[List[float]] = None) -> Dict:
+    def place_bracket(
+        self,
+        symbol: str,
+        side: str,
+        qty: int,
+        entry: float,
+        target: float,
+        stop: float,
+        market: bool = True,
+        price: float | None = None,
+        targets: list[float] | None = None,
+    ) -> dict:
         """Place entry + attached take-profit + stop-loss as one unit
         (Kite BO / Binance OCO-style legs). Returns {orderId, status, legs}.
         `targets` is the multi-level TP list; adapters without multi-level
         support use `target` (the primary level)."""
 
     @abstractmethod
-    def get_positions(self) -> List[Dict]:
+    def get_positions(self) -> list[dict]:
         """Open positions / bracket legs with live PnL."""
 
     @abstractmethod
-    def get_fills(self, since: Optional[float] = None) -> List[Dict]:
+    def get_fills(self, since: float | None = None) -> list[dict]:
         """Recent fills/trades — audit + slippage reconciliation."""

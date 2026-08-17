@@ -9,26 +9,29 @@ audit trail.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import time
 from collections import deque
-from typing import Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import config
-from . import db
-from . import obs
-from . import risk
-from . import security
-from . import vault
+from . import config, db, execution, obs, risk, security, vault
 from .backtest import ExecutionCostConfig, backtest
-from . import execution
 from .broker.base import BrokerError
 from .broker.ccxt_bt import CCXTBroker
 from .broker.kite import KiteAdapter, generate_session, login_url
@@ -36,15 +39,15 @@ from .broker.openalgo import OpenAlgoAdapter
 from .broker.paper import PaperBroker
 from .engine import build_runners
 from .feed import LiveFeed
-from .strategies import STRATEGIES, get_strategy, target_levels
 from .proxy import router as proxy_router
+from .strategies import STRATEGIES, get_strategy, target_levels
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data")
 SIGNALS_LOG = os.path.join(DATA_DIR, "signals.json")
 ORDERS_LOG = os.path.join(DATA_DIR, "orders.json")
 POSITIONS_LOG = os.path.join(DATA_DIR, "positions.json")
-closed_positions: List[dict] = []
-_placed_keys: Dict[str, dict] = {}  # idempotency keys ("sig:<id>" / "req:<id>") -> record
+closed_positions: list[dict] = []
+_placed_keys: dict[str, dict] = {}  # idempotency keys ("sig:<id>" / "req:<id>") -> record
 
 app = FastAPI(title="punch.trade", version="0.2.0")
 
@@ -61,17 +64,29 @@ async def security_middleware(request: Request, call_next):
             security.rate_limit_api(request)
         except HTTPException as e:
             obs.error_incr(e.status_code)
-            obs.log_request(request_id, request.method, request.url.path,
-                            e.status_code, (time.time() - started) * 1000)
-            return JSONResponse(status_code=e.status_code,
-                                content=_error_envelope(e, request_id),
-                                headers={**(e.headers or {}), "X-Request-Id": request_id})
+            obs.log_request(
+                request_id,
+                request.method,
+                request.url.path,
+                e.status_code,
+                (time.time() - started) * 1000,
+            )
+            return JSONResponse(
+                status_code=e.status_code,
+                content=_error_envelope(e, request_id),
+                headers={**(e.headers or {}), "X-Request-Id": request_id},
+            )
     response = await call_next(request)
     obs.incr("requests")
     if response.status_code >= 400:
         obs.error_incr(response.status_code)
-    obs.log_request(request_id, request.method, request.url.path,
-                    response.status_code, (time.time() - started) * 1000)
+    obs.log_request(
+        request_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        (time.time() - started) * 1000,
+    )
     response.headers["X-Request-Id"] = request_id
     security.apply_security_headers(response)
     return response
@@ -83,39 +98,58 @@ def _error_envelope(exc: HTTPException, request_id: str) -> dict:
     detail = exc.detail
     if isinstance(detail, dict) and "code" in detail:
         extra = {k: v for k, v in detail.items() if k not in ("code", "message")}
-        return {"error": {"code": detail["code"],
-                          "message": detail.get("message", str(detail)),
-                          "requestId": request_id, **extra}}
+        return {
+            "error": {
+                "code": detail["code"],
+                "message": detail.get("message", str(detail)),
+                "requestId": request_id,
+                **extra,
+            }
+        }
     if isinstance(detail, str) and detail:
-        code = {400: "BAD_REQUEST", 401: "UNAUTHORIZED", 403: "FORBIDDEN",
-                404: "NOT_FOUND", 409: "CONFLICT", 422: "UNPROCESSABLE_ENTITY",
-                429: "RATE_LIMITED", 502: "BAD_GATEWAY",
-                503: "SERVICE_UNAVAILABLE"}.get(exc.status_code,
-                                                f"HTTP_{exc.status_code}")
+        code = {
+            400: "BAD_REQUEST",
+            401: "UNAUTHORIZED",
+            403: "FORBIDDEN",
+            404: "NOT_FOUND",
+            409: "CONFLICT",
+            422: "UNPROCESSABLE_ENTITY",
+            429: "RATE_LIMITED",
+            502: "BAD_GATEWAY",
+            503: "SERVICE_UNAVAILABLE",
+        }.get(exc.status_code, f"HTTP_{exc.status_code}")
         message = detail
     else:
         code = f"HTTP_{exc.status_code}"
         message = str(detail or "")
-    return {"error": {"code": code, "message": message,
-                      "requestId": request_id}}
+    return {"error": {"code": code, "message": message, "requestId": request_id}}
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(status_code=exc.status_code,
-                        content=_error_envelope(exc, request.state.request_id),
-                        headers=exc.headers or {})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_error_envelope(exc, request.state.request_id),
+        headers=exc.headers or {},
+    )
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     obs.error_incr(422)
-    return JSONResponse(status_code=422,
-                        content={"error": {
-                            "code": "VALIDATION_ERROR",
-                            "message": str(exc.errors()[0].get("msg", "invalid input"))
-                                       if exc.errors() else "invalid input",
-                            "requestId": request.state.request_id}})
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": str(exc.errors()[0].get("msg", "invalid input"))
+                if exc.errors()
+                else "invalid input",
+                "requestId": request.state.request_id,
+            }
+        },
+    )
+
 
 # ---------------------------------------------------------------- auth --
 def _check_token(token: str) -> bool:
@@ -129,14 +163,13 @@ def require_token(x_punch_token: str = Header(default="", alias="X-Punch-Token")
 
 
 def _rejection(e: risk.RiskError) -> HTTPException:
-    return HTTPException(status_code=e.status,
-                         detail={"code": e.code, "message": e.detail})
+    return HTTPException(status_code=e.status, detail={"code": e.code, "message": e.detail})
 
 
 # ------------------------------------------------------------- ws hub ----
 class Hub:
     def __init__(self):
-        self.clients: List[WebSocket] = []
+        self.clients: list[WebSocket] = []
         self.signals: deque = deque(maxlen=50)
 
     async def connect(self, ws: WebSocket) -> None:
@@ -157,20 +190,22 @@ class Hub:
 
 hub = Hub()
 
+
 # -------------------------------------------------------- broker mgr ----
 class BrokerManager:
     def __init__(self):
-        self.adapters: Dict[str, object] = {"paper": PaperBroker()}
+        self.adapters: dict[str, object] = {"paper": PaperBroker()}
 
     def get(self, name: str):
         if name not in self.adapters:
-            raise HTTPException(status_code=400,
-                                detail=f"Broker '{name}' not connected. Connect it first.")
+            raise HTTPException(
+                status_code=400, detail=f"Broker '{name}' not connected. Connect it first."
+            )
         return self.adapters[name]
 
 
 brokers = BrokerManager()
-feed: Optional[LiveFeed] = None
+feed: LiveFeed | None = None
 
 
 # ------------------------------------------------------------ models ----
@@ -225,15 +260,15 @@ class BrokerReq(BaseModel):
 
 class OrderReq(BaseModel):
     broker: str = "paper"
-    strategyId: Optional[str] = None
-    signalId: Optional[str] = None
-    clientRequestId: Optional[str] = None
-    symbol: Optional[str] = None
+    strategyId: str | None = None
+    signalId: str | None = None
+    clientRequestId: str | None = None
+    symbol: str | None = None
     side: str = "buy"
     qty: int = Field(1, ge=1, le=config.MAX_QTY)
-    entry: Optional[float] = Field(None, gt=0)
-    targetPrice: Optional[float] = Field(None, gt=0)
-    stopLoss: Optional[float] = Field(None, gt=0)
+    entry: float | None = Field(None, gt=0)
+    targetPrice: float | None = Field(None, gt=0)
+    stopLoss: float | None = Field(None, gt=0)
 
 
 class ModeReq(BaseModel):
@@ -245,7 +280,7 @@ class ArmReq(BaseModel):
 
 
 # ------------------------------------------------------------- startup ----
-_loop: Optional[asyncio.AbstractEventLoop] = None
+_loop: asyncio.AbstractEventLoop | None = None
 
 
 @app.on_event("startup")
@@ -291,18 +326,24 @@ async def startup() -> None:
             elif broker_name == "binance":
                 creds = vault.load("binance")
                 brokers.adapters["binance"] = CCXTBroker(
-                    creds["api_key"], creds["api_secret"], creds.get("testnet", True))
+                    creds["api_key"], creds["api_secret"], creds.get("testnet", True)
+                )
             elif broker_name == "openalgo":
                 creds = vault.load("openalgo")
                 brokers.adapters["openalgo"] = OpenAlgoAdapter(
-                    creds["host"], creds["apikey"], creds.get("broker", "zerodha"))
+                    creds["host"], creds["apikey"], creds.get("broker", "zerodha")
+                )
         except Exception as e:
             print(f"[startup] failed to restore {broker_name}: {e}")
 
-    print(f"[startup] telegram alerts: {'ON' if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID else 'OFF'}")
+    print(
+        f"[startup] telegram alerts: {'ON' if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID else 'OFF'}"
+    )
     print(f"[startup] risk: {config.startup_report()} | armed: {risk.armed()}")
-    print("[startup] execution gate: "
-          f"mode={risk.mode()} — real orders require LIVE mode + explicit arming")
+    print(
+        "[startup] execution gate: "
+        f"mode={risk.mode()} — real orders require LIVE mode + explicit arming"
+    )
 
     feed = LiveFeed(
         brokers.adapters["paper"],
@@ -326,9 +367,10 @@ def on_signal(signal: dict) -> None:
         _loop.create_task(_telegram_push(signal))
 
 
-def _update_signal(signal_id: str, **fields) -> Optional[dict]:
+def _update_signal(signal_id: str, **fields) -> dict | None:
     """Apply a status/lifecycle change to an in-memory signal (validated)."""
     from . import signals as sig_mod
+
     for s in hub.signals:
         if s.get("id") == signal_id:
             new = sig_mod.with_status(s, fields.pop("status"), **fields)
@@ -343,14 +385,17 @@ async def _telegram_push(signal: dict) -> None:
     import httpx
 
     levels = " → ".join(str(t) for t in signal.get("targets", [signal.get("targetPrice")]))
-    text = (f"PUNCH.TRADE signal\n{signal['symbol']} {signal['side'].upper()}\n"
-            f"entry {signal['entry']} | TP {levels} | SL {signal['stopLoss']}\n"
-            f"strategy: {signal['strategyName']}")
+    text = (
+        f"PUNCH.TRADE signal\n{signal['symbol']} {signal['side'].upper()}\n"
+        f"entry {signal['entry']} | TP {levels} | SL {signal['stopLoss']}\n"
+        f"strategy: {signal['strategyName']}"
+    )
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             await client.post(
                 f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
-                json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text})
+                json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text},
+            )
     except Exception as e:
         print(f"[telegram] push failed: {e}")
 
@@ -393,11 +438,16 @@ def v1_health(_: None = Depends(require_token)) -> dict:
         "version": app.version,
         "uptimeSec": round(obs.uptime(), 1),
         "db": {"ok": db_path_ok, "error": db_error},
-        "feed": {"ok": feed_ok, "staleSymbols": stale,
-                 "symbols": len(feed.symbols()) if feed else 0,
-                 "bars": bars},
-        "brokers": {"connected": [n for n in brokers.adapters if n != "paper"],
-                    "mode": risk.mode()},
+        "feed": {
+            "ok": feed_ok,
+            "staleSymbols": stale,
+            "symbols": len(feed.symbols()) if feed else 0,
+            "bars": bars,
+        },
+        "brokers": {
+            "connected": [n for n in brokers.adapters if n != "paper"],
+            "mode": risk.mode(),
+        },
     }
 
 
@@ -405,26 +455,28 @@ def v1_health(_: None = Depends(require_token)) -> dict:
 def v1_metrics(_: None = Depends(require_token)) -> dict:
     """Operational counters: requests, errors, signals, orders, trades."""
     ledger_orders = execution.ledger()
-    filled = len([o for o in ledger_orders
-                  if o.get("status") == execution.FILLED])
-    rejected = len([o for o in ledger_orders
-                    if o.get("status") == execution.REJECTED])
-    open_ledger = len([o for o in ledger_orders
-                       if o.get("status") == execution.FILLED])
+    filled = len([o for o in ledger_orders if o.get("status") == execution.FILLED])
+    rejected = len([o for o in ledger_orders if o.get("status") == execution.REJECTED])
+    open_ledger = len([o for o in ledger_orders if o.get("status") == execution.FILLED])
     return {
         "ts": time.time(),
         "uptimeSec": round(obs.uptime(), 1),
         "counters": obs.counters(),
         "errorBuckets": obs.errors(),
         "signals": {"live": len(hub.signals), "stored": db.row_count("signals")},
-        "orders": {"ledger": len(ledger_orders), "filled": filled,
-                   "rejected": rejected, "open": open_ledger},
-        "trades": {"closed": len(execution.closed_trades()),
-                   "stored": db.row_count("trades")},
-        "risk": {"breakerOpen": risk.breaker_open(),
-                 "consecutiveLosses": risk.consecutive_losses(),
-                 "reconciliationOk": risk.reconciliation_ok(),
-                 "armed": risk.armed()},
+        "orders": {
+            "ledger": len(ledger_orders),
+            "filled": filled,
+            "rejected": rejected,
+            "open": open_ledger,
+        },
+        "trades": {"closed": len(execution.closed_trades()), "stored": db.row_count("trades")},
+        "risk": {
+            "breakerOpen": risk.breaker_open(),
+            "consecutiveLosses": risk.consecutive_losses(),
+            "reconciliationOk": risk.reconciliation_ok(),
+            "armed": risk.armed(),
+        },
     }
 
 
@@ -487,14 +539,12 @@ async def v1_place_order(req: OrderReq, _: None = Depends(require_token)) -> dic
 
 
 @app.post("/api/v1/backtest/{strategy_id}")
-def v1_backtest(strategy_id: str, req: BacktestReq,
-                _: None = Depends(require_token)) -> dict:
+def v1_backtest(strategy_id: str, req: BacktestReq, _: None = Depends(require_token)) -> dict:
     return run_backtest(strategy_id, req)
 
 
 @app.post("/api/v1/research/{strategy_id}")
-def v1_run_research(strategy_id: str, req: ResearchReq,
-                    _: None = Depends(require_token)) -> dict:
+def v1_run_research(strategy_id: str, req: ResearchReq, _: None = Depends(require_token)) -> dict:
     return run_research(strategy_id, req)
 
 
@@ -505,35 +555,56 @@ def v1_execution_reconcile(req: BrokerReq, _: None = Depends(require_token)) -> 
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "brokers": list(brokers.adapters.keys()),
-            "connected": [n for n in brokers.adapters if n != "paper"]}
+    return {
+        "status": "ok",
+        "brokers": list(brokers.adapters.keys()),
+        "connected": [n for n in brokers.adapters if n != "paper"],
+    }
 
 
 @app.post("/api/system/login")
-def system_login(request: Request, response: Response,
-                 _: None = Depends(require_token),
-                 _rl: None = Depends(security.rate_limit_login)) -> dict:
+def system_login(
+    request: Request,
+    response: Response,
+    _: None = Depends(require_token),
+    _rl: None = Depends(security.rate_limit_login),
+) -> dict:
     """Dashboard session login. Requires the API token header; returns a
     revocable session cookie (httpOnly) + CSRF cookie for same-origin
     state changes. Raw session token is returned once in the body."""
     token = security.create_session(
         ip=request.client.host if request.client else "",
-        user_agent=request.headers.get("user-agent", ""))
+        user_agent=request.headers.get("user-agent", ""),
+    )
     csrf = security.csrf_cookie()
-    response.set_cookie(security.SESSION_COOKIE, token, httponly=True,
-                        samesite="strict", max_age=security.SESSION_TTL_SECONDS,
-                        path="/", secure=False)
-    response.set_cookie(security.CSRF_COOKIE, csrf, httponly=False,
-                        samesite="strict", max_age=security.SESSION_TTL_SECONDS,
-                        path="/", secure=False)
-    return {"session": token, "csrf": csrf,
-            "expiresIn": security.SESSION_TTL_SECONDS}
+    response.set_cookie(
+        security.SESSION_COOKIE,
+        token,
+        httponly=True,
+        samesite="strict",
+        max_age=security.SESSION_TTL_SECONDS,
+        path="/",
+        secure=False,
+    )
+    response.set_cookie(
+        security.CSRF_COOKIE,
+        csrf,
+        httponly=False,
+        samesite="strict",
+        max_age=security.SESSION_TTL_SECONDS,
+        path="/",
+        secure=False,
+    )
+    return {"session": token, "csrf": csrf, "expiresIn": security.SESSION_TTL_SECONDS}
 
 
 @app.post("/api/system/logout")
-def system_logout(request: Request, response: Response,
-                  _session: None = Depends(security.require_session),
-                  _csrf: None = Depends(security.require_csrf)) -> dict:
+def system_logout(
+    request: Request,
+    response: Response,
+    _session: None = Depends(security.require_session),
+    _csrf: None = Depends(security.require_csrf),
+) -> dict:
     """Revoke the dashboard session (CSRF-protected)."""
     security.revoke_session(request.cookies.get(security.SESSION_COOKIE))
     response.delete_cookie(security.SESSION_COOKIE, path="/")
@@ -555,8 +626,8 @@ def strategies(_: None = Depends(require_token)) -> dict:
     return {"strategies": STRATEGIES}
 
 
-_leaderboard_cache: Dict[str, dict] = {}
-_status_cache: Dict[str, dict] = {}
+_leaderboard_cache: dict[str, dict] = {}
+_status_cache: dict[str, dict] = {}
 
 
 @app.get("/api/strategies/leaderboard")
@@ -575,14 +646,19 @@ def strategy_leaderboard(_: None = Depends(require_token)) -> dict:
             if "error" in stats:
                 continue
             m = stats["metrics"]
-            rows.append({"id": s["id"], "name": s["name"], "symbol": s["symbol"],
-                         "winRate": m["win_rate"],
-                         "netReturnPct": round(
-                             m["net_pnl"] / 1_000_000 * 100, 2),
-                         "maxDrawdownPct": m["max_drawdown_pct"],
-                         "sharpe": m["sharpe"],
-                         "profitFactor": m["profit_factor"],
-                         "trades": m["trades"]})
+            rows.append(
+                {
+                    "id": s["id"],
+                    "name": s["name"],
+                    "symbol": s["symbol"],
+                    "winRate": m["win_rate"],
+                    "netReturnPct": round(m["net_pnl"] / 1_000_000 * 100, 2),
+                    "maxDrawdownPct": m["max_drawdown_pct"],
+                    "sharpe": m["sharpe"],
+                    "profitFactor": m["profit_factor"],
+                    "trades": m["trades"],
+                }
+            )
         except Exception:
             continue
     rows.sort(key=lambda r: (r["sharpe"], r["winRate"]), reverse=True)
@@ -603,29 +679,34 @@ def run_backtest(strategy_id: str, req: BacktestReq, _: None = Depends(require_t
         # Public OHLCV needs no API keys — backtests work without connecting.
         adapter = CCXTBroker("", "", testnet=False)
     else:
-        raise HTTPException(status_code=400,
-                            detail=f"Broker '{req.broker}' not connected. Connect it first.")
+        raise HTTPException(
+            status_code=400, detail=f"Broker '{req.broker}' not connected. Connect it first."
+        )
     try:
         bars = adapter.get_historical_bars(strategy["symbol"], req.interval, req.days)
     except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from None
     try:
         costs = ExecutionCostConfig(
-            starting_capital=req.startingCapital, position_pct=req.positionPct,
-            commission_bps=req.commissionBps, slippage_bps=req.slippageBps,
-            spread_bps=req.spreadBps, intrabar_policy=req.intrabarPolicy,
-            gap_policy=req.gapPolicy)
+            starting_capital=req.startingCapital,
+            position_pct=req.positionPct,
+            commission_bps=req.commissionBps,
+            slippage_bps=req.slippageBps,
+            spread_bps=req.spreadBps,
+            intrabar_policy=req.intrabarPolicy,
+            gap_policy=req.gapPolicy,
+        )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
     return {"source": req.broker, "bars": len(bars), **backtest(strategy, bars, costs)}
 
 
 @app.post("/api/research/{strategy_id}")
-def run_research(strategy_id: str, req: ResearchReq,
-                 _: None = Depends(require_token)) -> dict:
+def run_research(strategy_id: str, req: ResearchReq, _: None = Depends(require_token)) -> dict:
     """Full research dossier: chronological splits, walk-forward,
     parameter stability, bootstrap, regime breakdown, quality gate."""
     from .research import ResearchConfig, research_report
+
     strategy = get_strategy(strategy_id)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Unknown strategy")
@@ -634,20 +715,23 @@ def run_research(strategy_id: str, req: ResearchReq,
     elif req.broker == "binance":
         adapter = CCXTBroker("", "", testnet=False)
     else:
-        raise HTTPException(status_code=400,
-                            detail=f"Broker '{req.broker}' not connected. Connect it first.")
+        raise HTTPException(
+            status_code=400, detail=f"Broker '{req.broker}' not connected. Connect it first."
+        )
     try:
         bars = adapter.get_historical_bars(strategy["symbol"], req.interval, req.days)
     except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from None
     if len(bars) < 100:
-        raise HTTPException(status_code=400,
-                            detail="Need at least 100 bars for research")
+        raise HTTPException(status_code=400, detail="Need at least 100 bars for research")
     try:
         cfg = ResearchConfig(
-            train_pct=req.trainPct, val_pct=req.valPct, test_pct=req.testPct,
+            train_pct=req.trainPct,
+            val_pct=req.valPct,
+            test_pct=req.testPct,
             walk_forward_windows=req.walkForwardWindows,
-            bootstrap_iterations=req.bootstrapIterations, seed=req.seed,
+            bootstrap_iterations=req.bootstrapIterations,
+            seed=req.seed,
             costs=ExecutionCostConfig(
                 starting_capital=req.startingCapital,
                 position_pct=req.positionPct,
@@ -655,13 +739,15 @@ def run_research(strategy_id: str, req: ResearchReq,
                 slippage_bps=req.slippageBps,
                 spread_bps=req.spreadBps,
                 intrabar_policy=req.intrabarPolicy,
-                gap_policy=req.gapPolicy))
+                gap_policy=req.gapPolicy,
+            ),
+        )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
     try:
         report = research_report(strategy, bars, cfg)
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from None
     db.write_research_run(strategy_id, report)
     return {"source": req.broker, **report}
 
@@ -670,6 +756,7 @@ def run_research(strategy_id: str, req: ResearchReq,
 def ai_status(_: None = Depends(require_token)) -> dict:
     """Local LLM availability (auto-detected qwen2.5 model, never downloads)."""
     from .ai import status as ai_status_info
+
     return ai_status_info()
 
 
@@ -681,20 +768,26 @@ def ai_analyze(strategy_id: str, _: None = Depends(require_token)) -> dict:
     `error` hint and `analysis: null` — never a crash, never a secret.
     """
     from .ai import analyze as ai_analyze_info
+
     strategy = get_strategy(strategy_id)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Unknown strategy")
     try:
         from .research import ResearchConfig, research_report
-        from .strategy_status import live_drift, compute_status
+        from .strategy_status import compute_status, live_drift
+
         adapter = brokers.adapters["paper"]
         bars = adapter.get_historical_bars(strategy["symbol"], "5m", 30)
         research = None
         if len(bars) >= 100:
             research = research_report(strategy, bars, ResearchConfig())
-        st = compute_status(strategy["id"], strategy.get("status", "DRAFT"),
-                            has_backtest=research is not None,
-                            research=research, drift=None)
+        st = compute_status(
+            strategy["id"],
+            strategy.get("status", "DRAFT"),
+            has_backtest=research is not None,
+            research=research,
+            drift=None,
+        )
         drift = None
         try:
             drift = live_drift(strategy["id"], execution.closed_trades())
@@ -702,11 +795,9 @@ def ai_analyze(strategy_id: str, _: None = Depends(require_token)) -> dict:
             drift = None
     except Exception:
         research = None
-        st = {"status": "UNKNOWN", "reason": "context build failed",
-              "score": 0, "canPromoteTo": []}
+        st = {"status": "UNKNOWN", "reason": "context build failed", "score": 0, "canPromoteTo": []}
         drift = None
-    return ai_analyze_info(strategy, research=research,
-                           status=st, drift=drift)
+    return ai_analyze_info(strategy, research=research, status=st, drift=drift)
 
 
 @app.get("/api/strategies/status")
@@ -715,6 +806,7 @@ def strategy_statuses(_: None = Depends(require_token)) -> dict:
     10 min; drift fed by the execution layer)."""
     from .research import ResearchConfig, research_report
     from .strategy_status import compute_status
+
     now = time.time()
     if _status_cache and now - _status_cache.get("ts", 0) < 600:
         return _status_cache
@@ -727,14 +819,21 @@ def strategy_statuses(_: None = Depends(require_token)) -> dict:
             research = research_report(s, bars, ResearchConfig())
         except Exception:
             research = None
-        st = compute_status(s["id"], s.get("status", "DRAFT"),
-                            has_backtest=True, research=research, drift=None)
-        rows.append({
-            "id": s["id"], "name": s["name"], "symbol": s["symbol"],
-            "status": st["status"], "reason": st["reason"],
-            "score": st["score"], "canPromoteTo": st["canPromoteTo"],
-            "qualityGate": (research or {}).get("qualityGate"),
-        })
+        st = compute_status(
+            s["id"], s.get("status", "DRAFT"), has_backtest=True, research=research, drift=None
+        )
+        rows.append(
+            {
+                "id": s["id"],
+                "name": s["name"],
+                "symbol": s["symbol"],
+                "status": st["status"],
+                "reason": st["reason"],
+                "score": st["score"],
+                "canPromoteTo": st["canPromoteTo"],
+                "qualityGate": (research or {}).get("qualityGate"),
+            }
+        )
     result = {"ts": now, "rows": rows}
     _status_cache.clear()
     _status_cache.update(result)
@@ -762,7 +861,7 @@ def risk_state(_: None = Depends(require_token)) -> dict:
 
 class SizingReq(BaseModel):
     equity: float
-    riskPct: Optional[float] = None
+    riskPct: float | None = None
     entry: float
     stop: float
     side: str = "buy"
@@ -774,12 +873,15 @@ def risk_sizing(req: SizingReq, _: None = Depends(require_token)) -> dict:
     try:
         return risk.size_position(
             equity=req.equity,
-            risk_pct=req.riskPct if req.riskPct is not None
-            else config.RISK_PER_TRADE_PCT,
-            entry=req.entry, stop=req.stop, side=req.side)
+            risk_pct=req.riskPct if req.riskPct is not None else config.RISK_PER_TRADE_PCT,
+            entry=req.entry,
+            stop=req.stop,
+            side=req.side,
+        )
     except risk.RiskError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code,
-                                                          "message": e.detail})
+        raise HTTPException(
+            status_code=e.status, detail={"code": e.code, "message": e.detail}
+        ) from None
 
 
 @app.post("/api/risk/breaker/reset")
@@ -821,7 +923,7 @@ def kite_login_url(req: LoginUrlReq, _: None = Depends(require_token)) -> dict:
     try:
         return {"url": login_url(req.api_key)}
     except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from None
 
 
 @app.post("/api/broker/kite/connect")
@@ -829,7 +931,7 @@ def kite_connect(req: KiteConnectReq, _: None = Depends(require_token)) -> dict:
     try:
         session = generate_session(req.api_key, req.api_secret, req.request_token)
     except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from None
     vault.save("kite", session)
     brokers.adapters["kite"] = KiteAdapter(session["api_key"], session["access_token"])
     return {"connected": True, "broker": "kite"}
@@ -841,9 +943,10 @@ def binance_connect(req: BinanceConnectReq, _: None = Depends(require_token)) ->
         adapter = CCXTBroker(req.api_key, req.api_secret, req.testnet)
         status = adapter.status()
     except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    vault.save("binance", {"api_key": req.api_key, "api_secret": req.api_secret,
-                           "testnet": req.testnet})
+        raise HTTPException(status_code=502, detail=str(e)) from None
+    vault.save(
+        "binance", {"api_key": req.api_key, "api_secret": req.api_secret, "testnet": req.testnet}
+    )
     brokers.adapters["binance"] = adapter
     return {"connected": True, "broker": "binance", **status}
 
@@ -854,7 +957,7 @@ def openalgo_connect(req: OpenAlgoConnectReq, _: None = Depends(require_token)) 
     try:
         status = adapter.status()
     except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from None
     if not status.get("connected"):
         raise HTTPException(status_code=502, detail=f"OpenAlgo at {req.host} unreachable")
     vault.save("openalgo", {"host": req.host, "apikey": req.apikey, "broker": req.broker})
@@ -892,34 +995,40 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
     if req.signalId:
         signal = _find_signal(req.signalId)
         if signal is None:
-            raise HTTPException(status_code=409,
-                                detail={"code": "SIGNAL_NOT_FOUND",
-                                        "message": f"unknown signal {req.signalId}"})
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "SIGNAL_NOT_FOUND", "message": f"unknown signal {req.signalId}"},
+            )
         signal_ts = signal.get("ts") or time.time()
         if not req.symbol:
             req.symbol = signal["symbol"]
         if req.symbol != signal["symbol"]:
-            raise HTTPException(status_code=422,
-                                detail={"code": "INVALID_INPUT",
-                                        "message": "symbol does not match the signal"})
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "INVALID_INPUT", "message": "symbol does not match the signal"},
+            )
         req.entry = req.entry or signal["entry"]
         req.targetPrice = req.targetPrice or signal["targetPrice"]
         req.stopLoss = req.stopLoss or signal["stopLoss"]
 
     if req.entry is None or req.targetPrice is None or req.stopLoss is None:
         if req.strategyId is None or feed is None:
-            raise HTTPException(status_code=400,
-                                detail={"code": "INVALID_INPUT",
-                                        "message": "provide entry/targetPrice/stopLoss "
-                                                   "or a signalId"})
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "INVALID_INPUT",
+                    "message": "provide entry/targetPrice/stopLoss or a signalId",
+                },
+            )
         strategy = get_strategy(req.strategyId)
         if strategy is None:
             raise HTTPException(status_code=404, detail="Unknown strategy")
         series = feed.bars.get(strategy["symbol"])
         if not series:
-            raise HTTPException(status_code=409,
-                                detail={"code": "NO_BARS",
-                                        "message": f"No live bars yet for {strategy['symbol']}"})
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "NO_BARS", "message": f"No live bars yet for {strategy['symbol']}"},
+            )
         close = series[-1]["close"]
         req.entry = close
         req.targetPrice = close * (1 + target_levels(strategy)[0] / 100)
@@ -934,43 +1043,65 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
 
     # ---- pre-trade risk gate (typed rejections)
     try:
-        risk.check(broker=req.broker, signal=signal, signal_ts=signal_ts,
-                   feed=feed, symbol=req.symbol)
+        risk.check(
+            broker=req.broker, signal=signal, signal_ts=signal_ts, feed=feed, symbol=req.symbol
+        )
         open_positions = 0
-        try:
-            open_positions = len([p for p in adapter.get_positions()
-                                  if p.get("status") == "open"])
-        except BrokerError:
-            pass
-        risk.enforce_limits(qty=req.qty, open_positions=open_positions,
-                            daily_loss_pct=_daily_loss_pct(),
-                            entry=req.entry, target=req.targetPrice,
-                            stop=req.stopLoss)
+        with contextlib.suppress(BrokerError):
+            open_positions = len([p for p in adapter.get_positions() if p.get("status") == "open"])
+        risk.enforce_limits(
+            qty=req.qty,
+            open_positions=open_positions,
+            daily_loss_pct=_daily_loss_pct(),
+            entry=req.entry,
+            target=req.targetPrice,
+            stop=req.stopLoss,
+        )
     except risk.RiskError as e:
         if req.signalId:
             _update_signal(req.signalId, status="REJECTED", rejection=e.code)
-            _loop.create_task(hub.broadcast(
-                {"type": "signal_update",
-                 "data": {"id": req.signalId, "status": "REJECTED",
-                          "rejection": e.code}}))
-        raise _rejection(e)
+            _loop.create_task(
+                hub.broadcast(
+                    {
+                        "type": "signal_update",
+                        "data": {"id": req.signalId, "status": "REJECTED", "rejection": e.code},
+                    }
+                )
+            )
+        raise _rejection(e) from None
 
     try:
         result = await asyncio.to_thread(
-            adapter.place_bracket, req.symbol, req.side, req.qty,
-            req.entry, req.targetPrice, req.stopLoss, True, None, targets)
+            adapter.place_bracket,
+            req.symbol,
+            req.side,
+            req.qty,
+            req.entry,
+            req.targetPrice,
+            req.stopLoss,
+            True,
+            None,
+            targets,
+        )
     except BrokerError as e:
         if req.clientRequestId or req.signalId:
             order_id = req.clientRequestId or req.signalId or "unknown"
             execution.mark(order_id, "REJECTED")
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from None
 
     # execution ledger: broker order id is the key (paper closes match it)
     order_id = result.get("orderId") or req.clientRequestId or req.signalId
     execution.record_order(
-        order_id, signal_id=req.signalId, strategy_id=req.strategyId,
-        symbol=req.symbol, side=req.side, qty=req.qty, entry=req.entry,
-        broker=req.broker, client_request_id=req.clientRequestId)
+        order_id,
+        signal_id=req.signalId,
+        strategy_id=req.strategyId,
+        symbol=req.symbol,
+        side=req.side,
+        qty=req.qty,
+        entry=req.entry,
+        broker=req.broker,
+        client_request_id=req.clientRequestId,
+    )
     execution.mark(order_id, "FILLED" if req.broker == "paper" else "SUBMITTED")
 
     # durable mirror of the execution ledger record
@@ -980,15 +1111,27 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
 
     if req.signalId:
         _update_signal(req.signalId, status="EXECUTED")
-        _loop.create_task(hub.broadcast(
-            {"type": "signal_update",
-             "data": {"id": req.signalId, "status": "EXECUTED"}}))
+        _loop.create_task(
+            hub.broadcast(
+                {"type": "signal_update", "data": {"id": req.signalId, "status": "EXECUTED"}}
+            )
+        )
 
-    record = {"ts": time.time(), "broker": req.broker, "strategyId": req.strategyId,
-              "signalId": req.signalId, "clientRequestId": req.clientRequestId,
-              "symbol": req.symbol, "side": req.side, "qty": req.qty,
-              "entry": req.entry, "target": req.targetPrice, "stop": req.stopLoss,
-              "mode": risk.mode(), "result": result}
+    record = {
+        "ts": time.time(),
+        "broker": req.broker,
+        "strategyId": req.strategyId,
+        "signalId": req.signalId,
+        "clientRequestId": req.clientRequestId,
+        "symbol": req.symbol,
+        "side": req.side,
+        "qty": req.qty,
+        "entry": req.entry,
+        "target": req.targetPrice,
+        "stop": req.stopLoss,
+        "mode": risk.mode(),
+        "result": result,
+    }
     record = security.sanitize_dict(record)
     _append_json(ORDERS_LOG, record)
     if idem_key:
@@ -996,7 +1139,7 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
     return record
 
 
-def _find_signal(signal_id: str) -> Optional[dict]:
+def _find_signal(signal_id: str) -> dict | None:
     for s in hub.signals:
         if s.get("id") == signal_id:
             return s
@@ -1006,8 +1149,11 @@ def _find_signal(signal_id: str) -> Optional[dict]:
 def _daily_loss_pct() -> float:
     """Realized PnL % of today's closed positions (paper ledger)."""
     start_of_day = int(time.time() // 86400) * 86400
-    return sum((p.get("pnl_pct") or 0.0)
-               for p in closed_positions if (p.get("opened_at") or 0) >= start_of_day)
+    return sum(
+        (p.get("pnl_pct") or 0.0)
+        for p in closed_positions
+        if (p.get("opened_at") or 0) >= start_of_day
+    )
 
 
 @app.get("/api/positions")
@@ -1016,7 +1162,7 @@ def positions(broker: str = "paper", _: None = Depends(require_token)) -> dict:
     try:
         return {"broker": broker, "positions": adapter.get_positions()}
     except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from None
 
 
 @app.get("/api/fills")
@@ -1025,7 +1171,7 @@ def fills(broker: str = "paper", _: None = Depends(require_token)) -> dict:
     try:
         return {"broker": broker, "fills": adapter.get_fills()}
     except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from None
 
 
 @app.get("/api/signals/last")
@@ -1039,7 +1185,7 @@ def signal_history(_: None = Depends(require_token)) -> dict:
     # Fall back to the audit file for a cold start with no hub yet.
     rows = list(hub.signals)
     if not rows and os.path.exists(SIGNALS_LOG):
-        with open(SIGNALS_LOG, "r", encoding="utf-8") as f:
+        with open(SIGNALS_LOG, encoding="utf-8") as f:
             rows = [json.loads(line) for line in f if line.strip()]
     return {"signals": rows[-100:]}
 
@@ -1048,7 +1194,7 @@ def signal_history(_: None = Depends(require_token)) -> dict:
 def order_history(_: None = Depends(require_token)) -> dict:
     rows = []
     if os.path.exists(ORDERS_LOG):
-        with open(ORDERS_LOG, "r", encoding="utf-8") as f:
+        with open(ORDERS_LOG, encoding="utf-8") as f:
             rows = [json.loads(line) for line in f if line.strip()]
     return {"orders": rows}
 
@@ -1060,6 +1206,7 @@ def analytics(_: None = Depends(require_token)) -> dict:
     Multi-TP positions close in fractions; each event's pnl_pct is per-unit,
     so events are weighted by qty/qty_total to get the position-level return.
     """
+
     def weighted(p: dict) -> float:
         qty = p.get("qty") or 1.0
         total = p.get("qty_total") or qty
@@ -1092,7 +1239,7 @@ def analytics(_: None = Depends(require_token)) -> dict:
 @app.get("/api/candles")
 def candles(symbol: str, _: None = Depends(require_token), limit: int = 120) -> dict:
     """Live candle series for the chart panel (falls back to paper history)."""
-    bars: List[dict] = []
+    bars: list[dict] = []
     if feed is not None:
         bars = feed.bars.get(symbol, [])
     if not bars:
@@ -1116,32 +1263,30 @@ async def ws_signals(ws: WebSocket) -> None:
     try:
         msg = await asyncio.wait_for(ws.receive_text(), timeout=5.0)
         data = json.loads(msg)
-        authed = (data.get("type") == "auth"
-                  and _check_token(str(data.get("token", ""))))
-    except (WebSocketDisconnect, asyncio.TimeoutError, json.JSONDecodeError,
-            AttributeError, KeyError):
+        authed = data.get("type") == "auth" and _check_token(str(data.get("token", "")))
+    except (TimeoutError, WebSocketDisconnect, json.JSONDecodeError, AttributeError, KeyError):
         pass
     if not authed:
         await ws.close(code=4401)
         return
     await hub.connect(ws)
-    try:
+    with contextlib.suppress(Exception):
         await ws.send_json({"type": "auth_ok"})
-    except Exception:
-        pass
     # snapshot: recent signals + open positions + broker status
     positions = []
-    try:
+    with contextlib.suppress(Exception):
         positions = brokers.adapters["paper"].get_positions()
-    except Exception:
-        pass
-    try:
-        await ws.send_json({"type": "snapshot",
-                            "data": {"signals": list(hub.signals),
-                                     "positions": positions,
-                                     "brokers": {n: a.name for n, a in brokers.adapters.items()}}})
-    except Exception:
-        pass
+    with contextlib.suppress(Exception):
+        await ws.send_json(
+            {
+                "type": "snapshot",
+                "data": {
+                    "signals": list(hub.signals),
+                    "positions": positions,
+                    "brokers": {n: a.name for n, a in brokers.adapters.items()},
+                },
+            }
+        )
     try:
         while True:
             await ws.receive_text()
@@ -1156,9 +1301,11 @@ def system_status(_: None = Depends(require_token)) -> dict:
         **risk.status(),
         "feeds": feed.health() if feed is not None else [],
         "signals": len(hub.signals),
-        "ledger": {"signals": os.path.exists(SIGNALS_LOG),
-                   "orders": os.path.exists(ORDERS_LOG),
-                   "positions": os.path.exists(POSITIONS_LOG)},
+        "ledger": {
+            "signals": os.path.exists(SIGNALS_LOG),
+            "orders": os.path.exists(ORDERS_LOG),
+            "positions": os.path.exists(POSITIONS_LOG),
+        },
         "version": app.version,
     }
 
@@ -1168,7 +1315,7 @@ def system_mode(req: ModeReq, _: None = Depends(require_token)) -> dict:
     try:
         return risk.set_mode(req.mode)
     except risk.RiskError as e:
-        raise _rejection(e)
+        raise _rejection(e) from None
 
 
 @app.post("/api/system/arm")
@@ -1176,7 +1323,7 @@ def system_arm(req: ArmReq, _: None = Depends(require_token)) -> dict:
     try:
         return risk.arm(req.broker, connected=req.broker in brokers.adapters)
     except risk.RiskError as e:
-        raise _rejection(e)
+        raise _rejection(e) from None
 
 
 @app.post("/api/system/stop")
@@ -1186,8 +1333,11 @@ def system_stop(_: None = Depends(require_token)) -> dict:
 
 
 # ------------------------------------------------------------- demo -----
-app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "..", "static")),
-          name="static")
+app.mount(
+    "/static",
+    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "..", "static")),
+    name="static",
+)
 
 
 @app.get("/demo")

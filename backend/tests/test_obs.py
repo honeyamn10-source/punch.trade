@@ -1,14 +1,8 @@
 """Observability + /api/v1 tests: request tracing, metrics, health, envelope."""
 
-import os
-
-import pytest
 from fastapi.testclient import TestClient
 
-from app import api
-from app import config
-from app import obs
-from app import security
+from app import api, config, obs
 
 client = TestClient(api.app)
 
@@ -30,9 +24,17 @@ def test_error_envelope_on_unauthorized():
 
 
 def test_error_envelope_preserves_typed_codes():
-    r = client.post("/api/orders", headers=H, json={
-        "broker": "paper", "symbol": "RELIANCE", "side": "buy", "qty": 1,
-        "signalId": "does-not-exist"})
+    r = client.post(
+        "/api/orders",
+        headers=H,
+        json={
+            "broker": "paper",
+            "symbol": "RELIANCE",
+            "side": "buy",
+            "qty": 1,
+            "signalId": "does-not-exist",
+        },
+    )
     assert r.status_code == 409
     body = r.json()
     assert body["error"]["code"] == "SIGNAL_NOT_FOUND"
@@ -47,9 +49,9 @@ def test_validation_error_envelope():
 
 def test_rate_limit_error_keeps_retry_after():
     # assert the envelope shape of a typed HTTPException through the handler
-    exc = api.HTTPException(429, detail={"code": "RATE_LIMITED",
-                                         "message": "slow down",
-                                         "retryAfter": 7})
+    exc = api.HTTPException(
+        429, detail={"code": "RATE_LIMITED", "message": "slow down", "retryAfter": 7}
+    )
     envelope = api._error_envelope(exc, "req-1")
     assert envelope["error"]["code"] == "RATE_LIMITED"
     assert envelope["error"]["retryAfter"] == 7
@@ -83,6 +85,7 @@ def test_event_log_written_and_sanitized(monkeypatch, tmp_path):
     lines = log_file.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 2
     import json as _json
+
     first = _json.loads(lines[0])
     assert first["kind"] == "api.request"
     assert first["requestId"] == "rid-1"
@@ -99,12 +102,16 @@ def test_counters_incr():
 
 
 def test_v1_alias_endpoints_reachable():
-    for path in ("/api/v1/strategies", "/api/v1/signals/last",
-                 "/api/v1/risk/state", "/api/v1/execution/trades",
-                 "/api/v1/system/storage", "/api/v1/system/status",
-                 "/api/v1/ai/status"):
+    for path in (
+        "/api/v1/strategies",
+        "/api/v1/signals/last",
+        "/api/v1/risk/state",
+        "/api/v1/execution/trades",
+        "/api/v1/system/storage",
+        "/api/v1/system/status",
+        "/api/v1/ai/status",
+    ):
         r = client.get(path, headers=H)
         assert r.status_code == 200, path
-    r = client.post("/api/v1/execution/reconcile", headers=H,
-                    json={"broker": "paper"})
+    r = client.post("/api/v1/execution/reconcile", headers=H, json={"broker": "paper"})
     assert r.status_code == 200

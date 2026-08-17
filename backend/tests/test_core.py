@@ -10,8 +10,9 @@ from app.engine import StrategyRunner
 def _bars(prices):
     out = []
     for i, c in enumerate(prices):
-        out.append({"ts": i, "open": c, "high": c * 1.002, "low": c * 0.998,
-                    "close": c, "volume": 1000})
+        out.append(
+            {"ts": i, "open": c, "high": c * 1.002, "low": c * 0.998, "close": c, "volume": 1000}
+        )
     return out
 
 
@@ -65,17 +66,19 @@ def test_donchian_and_vwap():
     d = indicators.donchian(values, 10)
     assert d["high"][29] == max(values[20:30])
     assert d["low"][29] == min(values[20:30])
-    bars = [{"open": v, "high": v + 1, "low": v - 1, "close": v, "volume": 10}
-            for v in values]
+    bars = [{"open": v, "high": v + 1, "low": v - 1, "close": v, "volume": 10} for v in values]
     w = indicators.vwap(bars, 10)
     assert w[29] is not None
-    assert w[29] == sum((b["high"] + b["low"] + b["close"]) / 3 * 10 for b in bars[20:30]) / (10 * 10)
+    assert w[29] == sum((b["high"] + b["low"] + b["close"]) / 3 * 10 for b in bars[20:30]) / (
+        10 * 10
+    )
 
 
 # -------------------------------------------- professional indicators ----
 def _ohlc(prices):
-    return [{"open": c, "high": c * 1.01, "low": c * 0.99, "close": c, "volume": 100}
-            for c in prices]
+    return [
+        {"open": c, "high": c * 1.01, "low": c * 0.99, "close": c, "volume": 100} for c in prices
+    ]
 
 
 def test_atr_positive_and_small_on_flat():
@@ -115,10 +118,14 @@ def test_adx_range():
 
 # ---------------------------------------------------------------- engine
 RSI_STRAT = {
-    "id": "t", "name": "Test", "symbol": "X", "interval": "5m",
+    "id": "t",
+    "name": "Test",
+    "symbol": "X",
+    "interval": "5m",
     "entry": {"indicator": "RSI", "period": 14, "condition": "crosses_below", "value": 30},
     "exit": {"indicator": "RSI", "period": 14, "condition": "crosses_above", "value": 55},
-    "tp_pct": 2.0, "sl_pct": 30.0,  # wide SL: signal fires mid-dip, dip must finish before fills
+    "tp_pct": 2.0,
+    "sl_pct": 30.0,  # wide SL: signal fires mid-dip, dip must finish before fills
 }
 
 
@@ -159,14 +166,17 @@ def test_backtest_reuses_engine():
     bars = _bars(_rsi_cross_series() + _rsi_cross_series())
     # position_pct < 1 so both trades can open (honest capital model)
     from app.backtest import ExecutionCostConfig
+
     result = backtest(strategy, bars, ExecutionCostConfig(position_pct=0.1))
     assert result["trades"] == 2
     assert 0 <= result["metrics"]["win_rate"] <= 100
     assert result["metrics"]["max_drawdown_pct"] >= 0
-    assert (result["exitSplit"].get("TP1", 0)
-            + result["exitSplit"].get("TP2", 0)
-            + result["exitSplit"].get("TP3", 0)
-            + result["exitSplit"].get("STOP", 0)) == result["trades"]
+    assert (
+        result["exitSplit"].get("TP1", 0)
+        + result["exitSplit"].get("TP2", 0)
+        + result["exitSplit"].get("TP3", 0)
+        + result["exitSplit"].get("STOP", 0)
+    ) == result["trades"]
 
 
 def test_backtest_metrics_present():
@@ -180,10 +190,14 @@ def test_backtest_metrics_present():
 
 
 MULTI_TP_STRAT = {
-    "id": "mtp", "name": "MultiTP", "symbol": "X", "interval": "5m",
+    "id": "mtp",
+    "name": "MultiTP",
+    "symbol": "X",
+    "interval": "5m",
     "entry": {"indicator": "SMA", "period": 5, "condition": "crosses_above", "value": "self"},
     "exit": {"indicator": "SMA", "period": 5, "condition": "crosses_below", "value": "self"},
-    "tp_levels": [1.0, 3.0], "sl_pct": 2.0,
+    "tp_levels": [1.0, 3.0],
+    "sl_pct": 2.0,
 }
 
 
@@ -224,12 +238,24 @@ def test_backtest_insufficient_data():
 
 # ------------------------------------------------- two-series conditions
 GOLDEN_CROSS = {
-    "id": "gc", "name": "GoldenCross", "symbol": "X", "interval": "5m",
-    "entry": {"indicator": "SMA", "period": 20, "condition": "crosses_above",
-              "value": {"indicator": "SMA", "period": 50}},
-    "exit": {"indicator": "SMA", "period": 20, "condition": "crosses_below",
-             "value": {"indicator": "SMA", "period": 50}},
-    "tp_pct": 2.0, "sl_pct": 1.0,
+    "id": "gc",
+    "name": "GoldenCross",
+    "symbol": "X",
+    "interval": "5m",
+    "entry": {
+        "indicator": "SMA",
+        "period": 20,
+        "condition": "crosses_above",
+        "value": {"indicator": "SMA", "period": 50},
+    },
+    "exit": {
+        "indicator": "SMA",
+        "period": 20,
+        "condition": "crosses_below",
+        "value": {"indicator": "SMA", "period": 50},
+    },
+    "tp_pct": 2.0,
+    "sl_pct": 1.0,
 }
 
 

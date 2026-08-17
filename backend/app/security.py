@@ -25,20 +25,19 @@ import hmac
 import secrets
 import threading
 import time
-from typing import Dict, Optional
 
 from fastapi import HTTPException, Request, Response
 
 from . import db
 
 # ------------------------------------------------------------- config ----
-SESSION_TTL_SECONDS = 12 * 3600          # dashboard session lifetime
+SESSION_TTL_SECONDS = 12 * 3600  # dashboard session lifetime
 CSRF_COOKIE = "punch_csrf"
 SESSION_COOKIE = "punch_session"
 
 # rate limits: (window_seconds, max_events)
-LOGIN_LIMIT = (60, 5)                    # 5 login attempts / min / IP
-API_LIMIT = (60, 240)                    # 240 API calls / min / IP
+LOGIN_LIMIT = (60, 5)  # 5 login attempts / min / IP
+API_LIMIT = (60, 240)  # 240 API calls / min / IP
 
 
 # ------------------------------------------------------------- sessions ----
@@ -53,12 +52,18 @@ def create_session(ip: str = "", user_agent: str = "") -> str:
         c.execute(
             "INSERT INTO sessions (token_hash, expires_at, created_at, ip, user_agent) "
             "VALUES (?,?,?,?,?)",
-            (_hash(token), time.time() + SESSION_TTL_SECONDS, time.time(),
-             ip[:64], user_agent[:128]))
+            (
+                _hash(token),
+                time.time() + SESSION_TTL_SECONDS,
+                time.time(),
+                ip[:64],
+                user_agent[:128],
+            ),
+        )
     return token
 
 
-def validate_session(token: Optional[str]) -> bool:
+def validate_session(token: str | None) -> bool:
     if not token:
         return False
     with db.transaction() as c:
@@ -74,7 +79,7 @@ def validate_session(token: Optional[str]) -> bool:
     return True
 
 
-def revoke_session(token: Optional[str]) -> None:
+def revoke_session(token: str | None) -> None:
     if not token:
         return
     with db.transaction() as c:
@@ -105,7 +110,7 @@ def require_csrf(request: Request) -> None:
 
 
 # ---------------------------------------------------------- rate limits ----
-_limits: Dict[str, list] = {}
+_limits: dict[str, list] = {}
 _limits_lock = threading.Lock()
 
 
@@ -118,8 +123,7 @@ def _sweep(now: float, window: float) -> None:
         _limits.pop(key, None)
 
 
-def rate_limit(request: Request, *, kind: str, window: float,
-               max_events: int) -> None:
+def rate_limit(request: Request, *, kind: str, window: float, max_events: int) -> None:
     """Sliding-window rate limit per client IP; raises 429 when exceeded."""
     now = time.time()
     key = f"{_client_ip(request)}:{kind}"
@@ -130,22 +134,24 @@ def rate_limit(request: Request, *, kind: str, window: float,
         _sweep(now, window * 4)
         if len(events) >= max_events:
             retry = max(1, int(window - (now - events[0])))
-            raise HTTPException(status_code=429,
-                                detail={"code": "RATE_LIMITED",
-                                        "message": f"too many requests — retry in {retry}s",
-                                        "retryAfter": retry},
-                                headers={"Retry-After": str(retry)})
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "RATE_LIMITED",
+                    "message": f"too many requests — retry in {retry}s",
+                    "retryAfter": retry,
+                },
+                headers={"Retry-After": str(retry)},
+            )
         events.append(now)
 
 
 def rate_limit_login(request: Request) -> None:
-    rate_limit(request, kind="login", window=LOGIN_LIMIT[0],
-               max_events=LOGIN_LIMIT[1])
+    rate_limit(request, kind="login", window=LOGIN_LIMIT[0], max_events=LOGIN_LIMIT[1])
 
 
 def rate_limit_api(request: Request) -> None:
-    rate_limit(request, kind="api", window=API_LIMIT[0],
-               max_events=API_LIMIT[1])
+    rate_limit(request, kind="api", window=API_LIMIT[0], max_events=API_LIMIT[1])
 
 
 def clear_limits() -> None:
@@ -157,26 +163,29 @@ def clear_limits() -> None:
 MAX_FIELD_LEN = 512
 
 
-def sanitize(value: Optional[str]) -> Optional[str]:
+def sanitize(value: str | None) -> str | None:
     """Strip control characters and cap length. None stays None."""
     if value is None:
         return None
-    cleaned = "".join(ch for ch in str(value)
-                      if ch.isprintable() or ch in "\t\n\r")
+    cleaned = "".join(ch for ch in str(value) if ch.isprintable() or ch in "\t\n\r")
     return cleaned[:MAX_FIELD_LEN]
 
 
-def sanitize_dict(d: Dict) -> Dict:
+def sanitize_dict(d: dict) -> dict:
     """Deep-clean string fields of a record (applied before persistence)."""
-    out: Dict = {}
+    out: dict = {}
     for k, v in d.items():
         if isinstance(v, str):
             out[k] = sanitize(v)
         elif isinstance(v, dict):
             out[k] = sanitize_dict(v)
         elif isinstance(v, list):
-            out[k] = [sanitize_dict(i) if isinstance(i, dict) else
-                      (sanitize(i) if isinstance(i, str) else i) for i in v]
+            out[k] = [
+                sanitize_dict(i)
+                if isinstance(i, dict)
+                else (sanitize(i) if isinstance(i, str) else i)
+                for i in v
+            ]
         else:
             out[k] = v
     return out
@@ -190,7 +199,8 @@ SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; img-src 'self' data:; "
         "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
-        "connect-src 'self' ws: wss:; frame-ancestors 'none'"),
+        "connect-src 'self' ws: wss:; frame-ancestors 'none'"
+    ),
 }
 
 

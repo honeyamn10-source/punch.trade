@@ -1,11 +1,10 @@
-﻿"""Safety tests: risk engine, execution modes, order hardening, auth.
+"""Safety tests: risk engine, execution modes, order hardening, auth.
 
 Covers AUD-001/002/003/004/005/007/008 from docs/AUDIT.md.
 """
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
 
@@ -13,9 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app import api
-from app import config
-from app import risk
+from app import api, config, risk
 
 
 # ------------------------------------------------------------- risk ----
@@ -98,15 +95,26 @@ def test_feed_stale_rejects():
     risk.set_mode("paper")
     now = time.time()
     with pytest.raises(risk.RiskError) as ei:
-        risk.check(broker="paper", signal=None, signal_ts=None,
-                   feed=FakeFeed({}), symbol="RELIANCE")
+        risk.check(
+            broker="paper", signal=None, signal_ts=None, feed=FakeFeed({}), symbol="RELIANCE"
+        )
     assert ei.value.code == "FEED_STALE"
     with pytest.raises(risk.RiskError) as ei:
-        risk.check(broker="paper", signal=None, signal_ts=None,
-                   feed=FakeFeed({"RELIANCE": now - 3600}), symbol="RELIANCE")
+        risk.check(
+            broker="paper",
+            signal=None,
+            signal_ts=None,
+            feed=FakeFeed({"RELIANCE": now - 3600}),
+            symbol="RELIANCE",
+        )
     assert ei.value.code == "FEED_STALE"
-    risk.check(broker="paper", signal=None, signal_ts=None,
-               feed=FakeFeed({"RELIANCE": now}), symbol="RELIANCE")
+    risk.check(
+        broker="paper",
+        signal=None,
+        signal_ts=None,
+        feed=FakeFeed({"RELIANCE": now}),
+        symbol="RELIANCE",
+    )
 
 
 def test_signal_expiry():
@@ -119,25 +127,44 @@ def test_signal_expiry():
 
 def test_limits():
     with pytest.raises(risk.RiskError) as ei:
-        risk.enforce_limits(qty=0, open_positions=0, daily_loss_pct=0.0,
-                            entry=100, target=105, stop=99)
+        risk.enforce_limits(
+            qty=0, open_positions=0, daily_loss_pct=0.0, entry=100, target=105, stop=99
+        )
     assert ei.value.code == "INVALID_QTY"
     with pytest.raises(risk.RiskError) as ei:
-        risk.enforce_limits(qty=config.MAX_QTY + 1, open_positions=0,
-                            daily_loss_pct=0.0, entry=100, target=105, stop=99)
+        risk.enforce_limits(
+            qty=config.MAX_QTY + 1,
+            open_positions=0,
+            daily_loss_pct=0.0,
+            entry=100,
+            target=105,
+            stop=99,
+        )
     assert ei.value.code == "MAX_QTY"
     with pytest.raises(risk.RiskError) as ei:
-        risk.enforce_limits(qty=1, open_positions=config.MAX_OPEN_POSITIONS,
-                            daily_loss_pct=0.0, entry=100, target=105, stop=99)
+        risk.enforce_limits(
+            qty=1,
+            open_positions=config.MAX_OPEN_POSITIONS,
+            daily_loss_pct=0.0,
+            entry=100,
+            target=105,
+            stop=99,
+        )
     assert ei.value.code == "MAX_POSITIONS"
     with pytest.raises(risk.RiskError) as ei:
-        risk.enforce_limits(qty=1, open_positions=0,
-                            daily_loss_pct=-config.MAX_DAILY_LOSS_PCT,
-                            entry=100, target=105, stop=99)
+        risk.enforce_limits(
+            qty=1,
+            open_positions=0,
+            daily_loss_pct=-config.MAX_DAILY_LOSS_PCT,
+            entry=100,
+            target=105,
+            stop=99,
+        )
     assert ei.value.code == "DAILY_LOSS_LIMIT"
     with pytest.raises(risk.RiskError) as ei:
-        risk.enforce_limits(qty=1, open_positions=0, daily_loss_pct=0.0,
-                            entry=-5, target=105, stop=99)
+        risk.enforce_limits(
+            qty=1, open_positions=0, daily_loss_pct=0.0, entry=-5, target=105, stop=99
+        )
     assert ei.value.code == "INVALID_PRICE"
 
 
@@ -149,8 +176,15 @@ def client():
 
 
 def _place(client, **kw):
-    body = {"broker": "paper", "symbol": "RELIANCE", "side": "buy", "qty": 1,
-            "entry": 100.0, "targetPrice": 105.0, "stopLoss": 99.0}
+    body = {
+        "broker": "paper",
+        "symbol": "RELIANCE",
+        "side": "buy",
+        "qty": 1,
+        "entry": 100.0,
+        "targetPrice": 105.0,
+        "stopLoss": 99.0,
+    }
     body.update(kw)
     api.feed.last_ts["RELIANCE"] = time.time()
     return client.post("/api/orders", json=body)
@@ -176,8 +210,14 @@ def test_order_idempotency_by_client_request_id(client):
 
 def test_order_idempotency_by_signal_id(client):
     now = time.time()
-    sig = {"id": "sig-" + uuid.uuid4().hex[:8], "symbol": "RELIANCE", "ts": now,
-           "entry": 100.0, "targetPrice": 105.0, "stopLoss": 99.0}
+    sig = {
+        "id": "sig-" + uuid.uuid4().hex[:8],
+        "symbol": "RELIANCE",
+        "ts": now,
+        "entry": 100.0,
+        "targetPrice": 105.0,
+        "stopLoss": 99.0,
+    }
     api.hub.signals.append(sig)
     r1 = _place(client, signalId=sig["id"])
     assert r1.status_code == 200, r1.text
@@ -192,9 +232,14 @@ def test_unknown_signal_rejected(client):
 
 
 def test_expired_signal_rejected(client):
-    sig = {"id": "sig-old-" + uuid.uuid4().hex[:6], "symbol": "RELIANCE",
-           "ts": time.time() - 1e6, "entry": 100.0, "targetPrice": 105.0,
-           "stopLoss": 99.0}
+    sig = {
+        "id": "sig-old-" + uuid.uuid4().hex[:6],
+        "symbol": "RELIANCE",
+        "ts": time.time() - 1e6,
+        "entry": 100.0,
+        "targetPrice": 105.0,
+        "stopLoss": 99.0,
+    }
     api.hub.signals.append(sig)
     r = _place(client, signalId=sig["id"])
     assert r.status_code == 409
@@ -240,9 +285,8 @@ def test_analytics_weights_partial_fills(client):
 
 
 def test_ws_requires_auth_message(client):
-    with pytest.raises(WebSocketDisconnect) as ei:
-        with client.websocket_connect("/ws/signals") as ws:
-            ws.receive_json()
+    with pytest.raises(WebSocketDisconnect) as ei, client.websocket_connect("/ws/signals") as ws:
+        ws.receive_json()
     assert ei.value.code == 4401
 
 
@@ -256,10 +300,9 @@ def test_ws_auth_ok_and_snapshot(client):
 
 
 def test_ws_rejects_bad_token(client):
-    with pytest.raises(WebSocketDisconnect) as ei:
-        with client.websocket_connect("/ws/signals") as ws:
-            ws.send_json({"type": "auth", "token": "wrong"})
-            ws.receive_json()
+    with pytest.raises(WebSocketDisconnect) as ei, client.websocket_connect("/ws/signals") as ws:
+        ws.send_json({"type": "auth", "token": "wrong"})
+        ws.receive_json()
     assert ei.value.code == 4401
 
 

@@ -83,20 +83,23 @@ def test_one_trade_freeze_pnl():
 def _bars(rows, start_ts=0):
     """rows: list of (open, high, low, close)."""
     out = []
-    for i, (o, h, l, c) in enumerate(rows):
-        out.append({"ts": start_ts + i, "open": o, "high": h, "low": l,
-                    "close": c, "volume": 1000})
+    for i, (o, h, lo, c) in enumerate(rows):
+        out.append(
+            {"ts": start_ts + i, "open": o, "high": h, "low": lo, "close": c, "volume": 1000}
+        )
     return out
 
 
 _WEDGE = {
-    "id": "wedge", "name": "Wedge", "symbol": "X", "interval": "5m",
+    "id": "wedge",
+    "name": "Wedge",
+    "symbol": "X",
+    "interval": "5m",
     "description": "test",
-    "entry": {"indicator": "SMA", "period": 5, "condition": "crosses_above",
-              "value": "self"},
-    "exit": {"indicator": "SMA", "period": 5, "condition": "crosses_above",
-             "value": 99999.0},
-    "tp_pct": 1.0, "sl_pct": 1.0,
+    "entry": {"indicator": "SMA", "period": 5, "condition": "crosses_above", "value": "self"},
+    "exit": {"indicator": "SMA", "period": 5, "condition": "crosses_above", "value": 99999.0},
+    "tp_pct": 1.0,
+    "sl_pct": 1.0,
 }
 
 
@@ -104,8 +107,10 @@ def _series_with_signal_fire():
     # 70 flat bars, then one big jump bar -> entry condition fires on the
     # jump bar's close (signal bar index 70). Entry must fill at bar 71 open.
     rows = [(100, 101, 99, 100)] * 70
-    rows += [(105, 111, 104, 110),           # signal bar (index 70)
-             (109, 111, 105, 110)]           # entry fills at this open (109)
+    rows += [
+        (105, 111, 104, 110),  # signal bar (index 70)
+        (109, 111, 105, 110),
+    ]  # entry fills at this open (109)
     return _bars(rows), 71
 
 
@@ -148,8 +153,7 @@ def test_conservative_sl_first_same_bar():
     # entry at 109, SL=107.91, TP1=110.09; next bar low 96 AND high 112 ->
     # conservative books the STOP first
     rows = [(100, 101, 99, 100)] * 70
-    rows += [(105, 111, 104, 110), (109, 111, 105, 110),
-             (108, 112, 96, 98)]
+    rows += [(105, 111, 104, 110), (109, 111, 105, 110), (108, 112, 96, 98)]
     res = backtest(_WEDGE, _bars(rows), ExecutionCostConfig(slippage_bps=0))
     assert res["trades"] == 1
     assert res["exitSplit"].get("STOP") == 1
@@ -157,10 +161,10 @@ def test_conservative_sl_first_same_bar():
 
 def test_optimistic_tp_first_same_bar():
     rows = [(100, 101, 99, 100)] * 70
-    rows += [(105, 111, 104, 110), (109, 111, 105, 110),
-             (108, 112, 96, 98)]
-    res = backtest(_WEDGE, _bars(rows),
-                   ExecutionCostConfig(slippage_bps=0, intrabar_policy="optimistic"))
+    rows += [(105, 111, 104, 110), (109, 111, 105, 110), (108, 112, 96, 98)]
+    res = backtest(
+        _WEDGE, _bars(rows), ExecutionCostConfig(slippage_bps=0, intrabar_policy="optimistic")
+    )
     assert res["trades"] == 1
     # TP1 filled (half at 110.09) then stop on the rest
     assert "TP1" in res["exitSplit"] or res["exitSplit"].get("STOP") == 1
@@ -169,8 +173,11 @@ def test_optimistic_tp_first_same_bar():
 def test_gap_fills_at_next_open():
     # bar after entry OPENS below the stop -> fill at open, not at SL
     rows = [(100, 101, 99, 100)] * 70
-    rows += [(105, 111, 104, 110), (109, 111, 105, 110),
-             (103, 104, 102, 103)]  # open 103 < SL 107.91 -> gap fill at 103
+    rows += [
+        (105, 111, 104, 110),
+        (109, 111, 105, 110),
+        (103, 104, 102, 103),
+    ]  # open 103 < SL 107.91 -> gap fill at 103
     res = backtest(_WEDGE, _bars(rows), ExecutionCostConfig(slippage_bps=0))
     assert res["trades"] == 1
     assert res["exitSplit"].get("STOP") == 1
@@ -179,8 +186,12 @@ def test_gap_fills_at_next_open():
 def test_end_of_test_liquidation():
     # signal fires near the end, position never hits SL/TP -> END_OF_TEST
     rows = [(100, 101, 99, 100)] * 70
-    rows += [(105, 111, 104, 110), (109, 109.5, 108.5, 109),
-             (109.5, 110, 109, 109.5), (110, 110, 109.5, 110)]
+    rows += [
+        (105, 111, 104, 110),
+        (109, 109.5, 108.5, 109),
+        (109.5, 110, 109, 109.5),
+        (110, 110, 109.5, 110),
+    ]
     res = backtest(_WEDGE, _bars(rows), ExecutionCostConfig(slippage_bps=0))
     assert res["trades"] == 1
     assert res["exitSplit"].get("END_OF_TEST") == 1
@@ -189,8 +200,7 @@ def test_end_of_test_liquidation():
 def test_costs_hit_entry_price_and_commission():
     rows = [(100, 101, 99, 100)] * 70
     rows += [(105, 111, 104, 110), (109, 111, 105, 110), (109, 111, 105, 110)]
-    costs = ExecutionCostConfig(commission_bps=10, slippage_bps=10,
-                                spread_bps=5)
+    costs = ExecutionCostConfig(commission_bps=10, slippage_bps=10, spread_bps=5)
     captured = {}
     orig_close = CompletedTrade.close
 

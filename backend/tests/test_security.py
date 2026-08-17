@@ -1,20 +1,16 @@
-﻿"""Security layer tests: sessions, CSRF, rate limits, sanitizer, headers."""
+"""Security layer tests: sessions, CSRF, rate limits, sanitizer, headers."""
 
 import time
 
-import pytest
 from fastapi.testclient import TestClient
 
-from app import api
-from app import config
-from app import security
+from app import api, config, security
 
 client = TestClient(api.app)
 
 
 def _login():
-    r = client.post("/api/system/login",
-                    headers={"X-Punch-Token": config.API_TOKEN})
+    r = client.post("/api/system/login", headers={"X-Punch-Token": config.API_TOKEN})
     assert r.status_code == 200, r.text
     return r
 
@@ -39,17 +35,21 @@ def test_logout_revokes_session_with_csrf():
     r = _login()
     token = r.cookies.get(security.SESSION_COOKIE)
     csrf = r.cookies.get(security.CSRF_COOKIE)
-    out = client.post("/api/system/logout",
-                      cookies={security.SESSION_COOKIE: token},
-                      headers={"X-Punch-CSRF": csrf})
+    out = client.post(
+        "/api/system/logout",
+        cookies={security.SESSION_COOKIE: token},
+        headers={"X-Punch-CSRF": csrf},
+    )
     assert out.status_code == 200
     assert not security.validate_session(token)
 
 
 def test_logout_requires_csrf():
     r = _login()
-    out = client.post("/api/system/logout",
-                      cookies={security.SESSION_COOKIE: r.cookies.get(security.SESSION_COOKIE)})
+    out = client.post(
+        "/api/system/logout",
+        cookies={security.SESSION_COOKIE: r.cookies.get(security.SESSION_COOKIE)},
+    )
     assert out.status_code == 403
 
 
@@ -63,8 +63,10 @@ def test_session_revoked_then_rejected():
 def test_expired_session_rejected_and_purged():
     token = security.create_session()
     with api.db.transaction() as c:
-        c.execute("UPDATE sessions SET expires_at=? WHERE token_hash=?",
-                  (time.time() - 1, security._hash(token)))
+        c.execute(
+            "UPDATE sessions SET expires_at=? WHERE token_hash=?",
+            (time.time() - 1, security._hash(token)),
+        )
     assert security.purge_expired() >= 1
     assert not security.validate_session(token)
 
@@ -72,9 +74,11 @@ def test_expired_session_rejected_and_purged():
 # -------------------------------------------------------------- csrf ----
 def test_csrf_mismatch_rejected():
     token = security.create_session()
-    out = client.post("/api/system/logout",
-                      cookies={security.SESSION_COOKIE: token},
-                      headers={"X-Punch-CSRF": "wrong"})
+    out = client.post(
+        "/api/system/logout",
+        cookies={security.SESSION_COOKIE: token},
+        headers={"X-Punch-CSRF": "wrong"},
+    )
     assert out.status_code == 403
 
 
@@ -82,11 +86,9 @@ def test_csrf_mismatch_rejected():
 def test_login_rate_limited_after_five_attempts():
     security.clear_limits()
     for _ in range(5):
-        r = client.post("/api/system/login",
-                        headers={"X-Punch-Token": config.API_TOKEN})
+        r = client.post("/api/system/login", headers={"X-Punch-Token": config.API_TOKEN})
         assert r.status_code == 200
-    r = client.post("/api/system/login",
-                    headers={"X-Punch-Token": config.API_TOKEN})
+    r = client.post("/api/system/login", headers={"X-Punch-Token": config.API_TOKEN})
     assert r.status_code == 429
     assert "retryAfter" in r.json()["error"]
 
@@ -95,11 +97,9 @@ def test_api_rate_limit_with_small_window(monkeypatch):
     security.clear_limits()
     monkeypatch.setattr(security, "API_LIMIT", (60, 3))
     for _ in range(3):
-        r = client.get("/api/strategies",
-                       headers={"X-Punch-Token": config.API_TOKEN})
+        r = client.get("/api/strategies", headers={"X-Punch-Token": config.API_TOKEN})
         assert r.status_code == 200
-    r = client.get("/api/strategies",
-                   headers={"X-Punch-Token": config.API_TOKEN})
+    r = client.get("/api/strategies", headers={"X-Punch-Token": config.API_TOKEN})
     assert r.status_code == 429
 
 
@@ -112,8 +112,7 @@ def test_sanitize_strips_control_and_caps_length():
 
 
 def test_sanitize_dict_recursive():
-    d = {"a": "ok\u0000", "b": {"c": "x" * 900, "n": 1},
-         "list": ["\u0001y", {"z": "z\u0000"}]}
+    d = {"a": "ok\u0000", "b": {"c": "x" * 900, "n": 1}, "list": ["\u0001y", {"z": "z\u0000"}]}
     out = security.sanitize_dict(d)
     assert out["a"] == "ok"
     assert len(out["b"]["c"]) == security.MAX_FIELD_LEN

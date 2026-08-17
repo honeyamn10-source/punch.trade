@@ -1,0 +1,34 @@
+# punch.trade — project metadata + tooling configuration.
+# Runtime dependencies remain in backend/requirements.txt (the canonical
+# install mechanism); this file configures quality tooling only and must
+# never drift into a second dependency source.
+[project]
+name = "punch-trade"
+description = "Self-hosted quantitative trading research, risk and broker-execution workstation."
+requires-python = ">=3.11"
+dependencies = []  # see backend/requirements.txt
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["backend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/*" = ["B011"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+filterwarnings = ["ignore::DeprecationWarning:starlette.testclient"]
+
+[tool.coverage.run]
+source = ["backend/app"]
+omit = ["backend/app/proxy.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]

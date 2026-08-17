@@ -5,9 +5,7 @@ import os
 
 import pytest
 
-from app import config
-from app import db
-from app import execution
+from app import config, db, execution
 
 
 # ----------------------------------------------------------- schema -----
@@ -45,17 +43,23 @@ def test_writes_and_reads_roundtrip():
 
 
 def test_transaction_rollback():
-    with pytest.raises(RuntimeError):
-        with db.transaction() as c:
-            c.execute("INSERT INTO signals (id, payload, ts) VALUES ('x', '{}', 1)")
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError), db.transaction() as c:
+        c.execute("INSERT INTO signals (id, payload, ts) VALUES ('x', '{}', 1)")
+        raise RuntimeError("boom")
     assert db.row_count("signals") == 0
 
 
 def test_execution_write_through_and_restore():
-    o = execution.record_order("o1", signal_id="s1", strategy_id="t",
-                               symbol="X", side="buy", qty=1, entry=10,
-                               broker="paper")
+    execution.record_order(
+        "o1",
+        signal_id="s1",
+        strategy_id="t",
+        symbol="X",
+        side="buy",
+        qty=1,
+        entry=10,
+        broker="paper",
+    )
     execution.mark("o1", "FILLED")
     assert db.row_count("orders") == 1
 
@@ -76,8 +80,10 @@ def _write_legacy(name, lines):
 
 def test_import_legacy_files_with_report_and_archive():
     _write_legacy("signals.json", [{"id": "s1", "ts": 1}, {"id": "s2", "ts": 2}])
-    _write_legacy("orders.json", [{"id": "o1", "status": "FILLED", "ts": 1},
-                                  {"result": {"orderId": "o2"}, "ts": 2}])
+    _write_legacy(
+        "orders.json",
+        [{"id": "o1", "status": "FILLED", "ts": 1}, {"result": {"orderId": "o2"}, "ts": 2}],
+    )
     _write_legacy("trades.json", [{"id": "t1", "netPnl": 1}, {"bad": "no id"}])
     _write_legacy("positions.json", [])
 

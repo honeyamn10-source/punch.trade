@@ -22,31 +22,35 @@ the stop — only use it to sanity-check the conservative ceiling.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from . import pnl as pnl_mod
 from .engine import StrategyRunner
-from .trades import CompletedTrade
 from .strategies import target_levels
+from .trades import CompletedTrade
 
 
 @dataclass
 class ExecutionCostConfig:
     starting_capital: float = 1_000_000.0
-    position_pct: float = 1.0            # fraction of cash risked per trade
-    commission_bps: float = 0.0          # per side, in basis points
-    slippage_bps: float = 0.0            # per side, in basis points
-    spread_bps: float = 0.0              # half-spread per side, bps
-    intrabar_policy: str = "conservative"   # conservative | optimistic
-    gap_policy: str = "fill_at_next_open"   # fill_at_next_open | skip
+    position_pct: float = 1.0  # fraction of cash risked per trade
+    commission_bps: float = 0.0  # per side, in basis points
+    slippage_bps: float = 0.0  # per side, in basis points
+    spread_bps: float = 0.0  # half-spread per side, bps
+    intrabar_policy: str = "conservative"  # conservative | optimistic
+    gap_policy: str = "fill_at_next_open"  # fill_at_next_open | skip
 
     def __post_init__(self):
         if self.intrabar_policy not in ("conservative", "optimistic"):
             raise ValueError("intrabar_policy must be conservative|optimistic")
         if self.gap_policy not in ("fill_at_next_open", "skip"):
             raise ValueError("gap_policy must be fill_at_next_open|skip")
-        for name in ("starting_capital", "position_pct", "commission_bps",
-                     "slippage_bps", "spread_bps"):
+        for name in (
+            "starting_capital",
+            "position_pct",
+            "commission_bps",
+            "slippage_bps",
+            "spread_bps",
+        ):
             v = getattr(self, name)
             if v < 0:
                 raise ValueError(f"{name} must be >= 0")
@@ -56,8 +60,7 @@ def _bps(v: float, p: float) -> float:
     return round(v * p * 0.0001, 6)
 
 
-def backtest(strategy: Dict, bars: List[dict],
-             costs: Optional[ExecutionCostConfig] = None) -> Dict:
+def backtest(strategy: dict, bars: list[dict], costs: ExecutionCostConfig | None = None) -> dict:
     """bars: OHLCV bar dicts, oldest first, with 'ts' (float, seconds)."""
     costs = costs or ExecutionCostConfig()
     if len(bars) < 60:
@@ -66,13 +69,13 @@ def backtest(strategy: Dict, bars: List[dict],
     runner = StrategyRunner(strategy)
     n_levels = len(target_levels(strategy))
     cash = costs.starting_capital
-    position: Optional[CompletedTrade] = None
-    trades: List[dict] = []
-    equity_curve: List[dict] = []
+    position: CompletedTrade | None = None
+    trades: list[dict] = []
+    equity_curve: list[dict] = []
     total_commission = 0.0
     total_slippage_cost = 0.0
-    entry_pending: Optional[dict] = None  # {"signal":..} waits for next open
-    tp_done: Dict[int, int] = {}  # id(position) -> count of filled TP levels
+    entry_pending: dict | None = None  # {"signal":..} waits for next open
+    tp_done: dict[int, int] = {}  # id(position) -> count of filled TP levels
 
     def commission(qty: float, price: float) -> float:
         return _bps(qty * price, costs.commission_bps)
@@ -81,7 +84,7 @@ def backtest(strategy: Dict, bars: List[dict],
         slip = _bps(price, costs.slippage_bps) + _bps(price, costs.spread_bps)
         return round(slip * qty, 6)
 
-    def open_position(signal, price: float, ts: float) -> Optional[CompletedTrade]:
+    def open_position(signal, price: float, ts: float) -> CompletedTrade | None:
         nonlocal cash, total_commission, total_slippage_cost
         qty = int(cash * costs.position_pct / price) if price > 0 else 0
         if qty <= 0:
@@ -94,11 +97,18 @@ def backtest(strategy: Dict, bars: List[dict],
         total_commission += comm
         total_slippage_cost += slip
         pos = CompletedTrade(
-            signal_id=signal.id, strategy_id=strategy["id"],
-            strategy_version=signal.strategy_version, symbol=strategy["symbol"],
-            side=signal.side, qty=qty, entry_ts=ts, entry_price=price_adj,
-            entry_commission=comm, timeframe=signal.timeframe,
-            regime=signal.regime)
+            signal_id=signal.id,
+            strategy_id=strategy["id"],
+            strategy_version=signal.strategy_version,
+            symbol=strategy["symbol"],
+            side=signal.side,
+            qty=qty,
+            entry_ts=ts,
+            entry_price=price_adj,
+            entry_commission=comm,
+            timeframe=signal.timeframe,
+            regime=signal.regime,
+        )
         tp_done[id(pos)] = 0
         entry_pending.clear()
         return pos
@@ -112,18 +122,19 @@ def backtest(strategy: Dict, bars: List[dict],
 
         if position is not None and not position.closed:
             sl = position.entry_price * (1 - strategy.get("sl_pct", 1.0) / 100)
-            tp_prices = [position.entry_price * (1 + p / 100)
-                         for p in target_levels(strategy)]
+            tp_prices = [position.entry_price * (1 + p / 100) for p in target_levels(strategy)]
 
             # gap: market opens beyond the stop -> fill at open (worse)
             gap_hit = bar["open"] <= sl if position.side == "buy" else bar["open"] >= sl
             if costs.gap_policy == "fill_at_next_open" and gap_hit:
-                price = bar["open"] - _bps(bar["open"], costs.slippage_bps) \
-                    if position.side == "buy" else bar["open"] + _bps(bar["open"], costs.slippage_bps)
+                price = (
+                    bar["open"] - _bps(bar["open"], costs.slippage_bps)
+                    if position.side == "buy"
+                    else bar["open"] + _bps(bar["open"], costs.slippage_bps)
+                )
                 slip = slippage_cost(position.qty, price)
                 total_slippage_cost += slip
-                position.close(ts, price, "STOP",
-                               commission(position.qty, price))
+                position.close(ts, price, "STOP", commission(position.qty, price))
                 total_commission += commission(position.qty, price)
                 trades.append(position.to_dict())
                 position = None
@@ -131,12 +142,14 @@ def backtest(strategy: Dict, bars: List[dict],
 
             if costs.intrabar_policy == "conservative":
                 if bar["low"] <= sl if position.side == "buy" else bar["high"] >= sl:
-                    price = sl - _bps(sl, costs.slippage_bps) if position.side == "buy" \
+                    price = (
+                        sl - _bps(sl, costs.slippage_bps)
+                        if position.side == "buy"
                         else sl + _bps(sl, costs.slippage_bps)
+                    )
                     slip = slippage_cost(position.qty, price)
                     total_slippage_cost += slip
-                    position.close(ts, price, "STOP",
-                                   commission(position.qty, price))
+                    position.close(ts, price, "STOP", commission(position.qty, price))
                     total_commission += commission(position.qty, price)
                     trades.append(position.to_dict())
                     position = None
@@ -150,15 +163,15 @@ def backtest(strategy: Dict, bars: List[dict],
                         if idx == n_levels - 1:
                             # final TP fill IS the close (no double record)
                             total_commission += commission(position.qty / n_levels, tp)
-                            position.close(ts, tp, f"TP{n_levels}",
-                                           commission(position.qty / n_levels, tp))
+                            position.close(
+                                ts, tp, f"TP{n_levels}", commission(position.qty / n_levels, tp)
+                            )
                             trades.append(position.to_dict())
                             position = None
                             tp_done.clear()
                             break
                         qty = position.qty / n_levels
-                        position.add_fill(ts, f"TP{idx + 1}", tp, qty,
-                                          commission(qty, tp))
+                        position.add_fill(ts, f"TP{idx + 1}", tp, qty, commission(qty, tp))
                         total_commission += commission(qty, tp)
                         tp_done[id(position)] = idx + 1
                         break
@@ -171,30 +184,35 @@ def backtest(strategy: Dict, bars: List[dict],
                     if hit:
                         if idx == n_levels - 1:
                             total_commission += commission(position.qty / n_levels, tp)
-                            position.close(ts, tp, f"TP{n_levels}",
-                                           commission(position.qty / n_levels, tp))
+                            position.close(
+                                ts, tp, f"TP{n_levels}", commission(position.qty / n_levels, tp)
+                            )
                             trades.append(position.to_dict())
                             position = None
                             tp_done.clear()
                             break
                         qty = position.qty / n_levels
-                        position.add_fill(ts, f"TP{idx + 1}", tp, qty,
-                                          commission(qty, tp))
+                        position.add_fill(ts, f"TP{idx + 1}", tp, qty, commission(qty, tp))
                         total_commission += commission(qty, tp)
                         tp_done[id(position)] = idx + 1
                         break
-                if position is not None and not position.closed:
-                    if bar["low"] <= sl if position.side == "buy" else bar["high"] >= sl:
-                        price = sl - _bps(sl, costs.slippage_bps) if position.side == "buy" \
-                            else sl + _bps(sl, costs.slippage_bps)
-                        slip = slippage_cost(position.qty, price)
-                        total_slippage_cost += slip
-                        position.close(ts, price, "STOP",
-                                       commission(position.qty, price))
-                        total_commission += commission(position.qty, price)
-                        trades.append(position.to_dict())
-                        position = None
-                        tp_done.clear()
+                if (
+                    position is not None
+                    and not position.closed
+                    and (bar["low"] <= sl if position.side == "buy" else bar["high"] >= sl)
+                ):
+                    price = (
+                        sl - _bps(sl, costs.slippage_bps)
+                        if position.side == "buy"
+                        else sl + _bps(sl, costs.slippage_bps)
+                    )
+                    slip = slippage_cost(position.qty, price)
+                    total_slippage_cost += slip
+                    position.close(ts, price, "STOP", commission(position.qty, price))
+                    total_commission += commission(position.qty, price)
+                    trades.append(position.to_dict())
+                    position = None
+                    tp_done.clear()
 
         signal = runner.on_bar(bars[: i + 1])
         if signal is not None and position is None and not entry_pending:
@@ -210,20 +228,29 @@ def backtest(strategy: Dict, bars: List[dict],
     # end of test: close anything still open at the last close
     if position is not None and not position.closed:
         last = bars[-1]
-        price = last["close"] - _bps(last["close"], costs.slippage_bps) \
-            if position.side == "buy" else last["close"] + _bps(last["close"], costs.slippage_bps)
+        price = (
+            last["close"] - _bps(last["close"], costs.slippage_bps)
+            if position.side == "buy"
+            else last["close"] + _bps(last["close"], costs.slippage_bps)
+        )
         slip = slippage_cost(position.qty, price)
         total_slippage_cost += slip
-        position.close(last["ts"], price, "END_OF_TEST",
-                       commission(position.qty, price))
+        position.close(last["ts"], price, "END_OF_TEST", commission(position.qty, price))
         total_commission += commission(position.qty, price)
         trades.append(position.to_dict())
         tp_done.clear()
 
-    metrics = pnl_mod.summary_stats([
-        {"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-         "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]}
-        for t in trades])
+    metrics = pnl_mod.summary_stats(
+        [
+            {
+                "net_pnl": t["netPnl"],
+                "net_pnl_pct": t["netPnlPct"],
+                "entry_ts": t["entryTs"],
+                "exit_ts": t["exitTs"],
+            }
+            for t in trades
+        ]
+    )
     exit_counts = {}
     for t in trades:
         exit_counts[t["closedBy"]] = exit_counts.get(t["closedBy"], 0) + 1

@@ -5,8 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from app import config
-from app import risk
+from app import config, risk
 
 
 @pytest.fixture(autouse=True)
@@ -20,17 +19,15 @@ def _reset():
 
 # -------------------------------------------------------------- sizing ----
 def test_size_position_fixed_fractional():
-    out = risk.size_position(equity=10_000, risk_pct=0.01,
-                             entry=100.0, stop=99.0)
-    assert out["qty"] == 100          # 100 risk / 1.0 distance
+    out = risk.size_position(equity=10_000, risk_pct=0.01, entry=100.0, stop=99.0)
+    assert out["qty"] == 100  # 100 risk / 1.0 distance
     assert out["riskAmount"] == 100.0
     assert out["riskPerShare"] == 1.0
 
 
 def test_size_position_caps_at_max_qty(monkeypatch):
     monkeypatch.setattr(config, "MAX_QTY", 50)
-    out = risk.size_position(equity=10_000, risk_pct=0.10,
-                             entry=100.0, stop=99.0)
+    out = risk.size_position(equity=10_000, risk_pct=0.10, entry=100.0, stop=99.0)
     assert out["qty"] == 50
 
 

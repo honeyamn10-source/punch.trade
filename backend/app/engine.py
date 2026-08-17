@@ -19,34 +19,65 @@ from __future__ import annotations
 
 import hashlib
 import time
-from typing import Dict, List, Optional
 
 from . import config
 from . import signals as signal_states
 from .market import regime_of
-from .strategies import (STRATEGIES, compute_indicator, condition_met,
-                         get_strategy, parameter_snapshot,
-                         strategy_metadata, target_levels)
+from .strategies import (
+    STRATEGIES,
+    compute_indicator,
+    condition_met,
+    parameter_snapshot,
+    strategy_metadata,
+    target_levels,
+)
 
 
-def deterministic_signal_id(strategy_id: str, version: str, symbol: str,
-                            timeframe: str, close_time: float, side: str) -> str:
+def deterministic_signal_id(
+    strategy_id: str, version: str, symbol: str, timeframe: str, close_time: float, side: str
+) -> str:
     raw = f"{strategy_id}|{version}|{symbol}|{timeframe}|{close_time:.3f}|{side}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
 class Signal:
-    __slots__ = ("id", "strategy_id", "strategy_version", "strategy_name",
-                 "symbol", "timeframe", "side", "entry", "targets",
-                 "target_price", "stop_loss", "ts", "candle_open",
-                 "candle_close", "close_time", "indicator_snapshot",
-                 "parameter_snapshot", "reason", "regime", "status",
-                 "expires_at")
+    __slots__ = (
+        "id",
+        "strategy_id",
+        "strategy_version",
+        "strategy_name",
+        "symbol",
+        "timeframe",
+        "side",
+        "entry",
+        "targets",
+        "target_price",
+        "stop_loss",
+        "ts",
+        "candle_open",
+        "candle_close",
+        "close_time",
+        "indicator_snapshot",
+        "parameter_snapshot",
+        "reason",
+        "regime",
+        "status",
+        "expires_at",
+    )
 
-    def __init__(self, strategy: Dict, symbol: str, side: str, entry: float,
-                 targets: List[float], stop_loss: float, bars: List[dict],
-                 series: List[Optional[float]], explanation: Dict,
-                 reason: str):
+    def __init__(
+        self,
+        strategy: dict,
+        symbol: str,
+        side: str,
+        entry: float,
+        targets: list[float],
+        stop_loss: float,
+        bars: list[dict],
+        series: list[float | None],
+        explanation: dict,
+        reason: str,
+    ):
         meta = strategy_metadata(strategy)
         bar = bars[-1]
         close_time = float(bar["ts"])
@@ -70,10 +101,14 @@ class Signal:
         self.regime = regime_of(bars)
         self.status = signal_states.ACTIVE
         self.id = deterministic_signal_id(
-            self.strategy_id, self.strategy_version, self.symbol,
-            self.timeframe, self.close_time, self.side)
-        self.expires_at = signal_states.expired_at(
-            {"ts": self.ts}, config.SIGNAL_TTL_SECONDS)
+            self.strategy_id,
+            self.strategy_version,
+            self.symbol,
+            self.timeframe,
+            self.close_time,
+            self.side,
+        )
+        self.expires_at = signal_states.expired_at({"ts": self.ts}, config.SIGNAL_TTL_SECONDS)
 
     def to_dict(self) -> dict:
         return {
@@ -105,12 +140,12 @@ class Signal:
 class StrategyRunner:
     """Runs one strategy against a rolling bar series."""
 
-    def __init__(self, strategy: Dict):
+    def __init__(self, strategy: dict):
         self.strategy = strategy
-        self.state: Dict[str, str] = {}  # symbol -> "idle" | "active"
-        self.active_since: Dict[str, float] = {}  # symbol -> ts (bars)
+        self.state: dict[str, str] = {}  # symbol -> "idle" | "active"
+        self.active_since: dict[str, float] = {}  # symbol -> ts (bars)
 
-    def on_bar(self, bars: List[dict]) -> Optional[Signal]:
+    def on_bar(self, bars: list[dict]) -> Signal | None:
         """Feed one completed bar (bars = full rolling series, oldest first).
 
         Returns a Signal the moment entry conditions fire, else None.
@@ -133,8 +168,9 @@ class StrategyRunner:
         if state == "active":
             # exit-by-timeout: a stalled indicator must not wedge the
             # strategy in "active" forever (AUD-017)
-            if (bars[-1]["ts"] - self.active_since.get(symbol, bars[0]["ts"])
-                    >= config.EXIT_TIMEOUT_BARS * (bars[-1]["ts"] - bars[-2]["ts"])):
+            if bars[-1]["ts"] - self.active_since.get(
+                symbol, bars[0]["ts"]
+            ) >= config.EXIT_TIMEOUT_BARS * (bars[-1]["ts"] - bars[-2]["ts"]):
                 self.state[symbol] = "idle"
                 return None
             if condition_met(exit_cfg, series, index, closes, bars):
@@ -152,32 +188,43 @@ class StrategyRunner:
         explanation = explain_entry(entry, series, index, closes, bars)
         reason = _fill_reason(self.strategy, explanation)
         return Signal(
-            strategy=self.strategy, symbol=symbol, side="buy",
-            entry=close, targets=targets,
+            strategy=self.strategy,
+            symbol=symbol,
+            side="buy",
+            entry=close,
+            targets=targets,
             stop_loss=close * (1 - sl_pct / 100),
-            bars=bars, series=series, explanation=explanation, reason=reason)
+            bars=bars,
+            series=series,
+            explanation=explanation,
+            reason=reason,
+        )
 
     def reset(self) -> None:
         self.state.clear()
         self.active_since.clear()
 
 
-def explain_entry(entry: Dict, series: List[Optional[float]], index: int,
-                  closes: List[float], bars: List[dict]) -> Dict:
+def explain_entry(
+    entry: dict, series: list[float | None], index: int, closes: list[float], bars: list[dict]
+) -> dict:
     from .strategies import explain_condition
+
     return explain_condition(entry, series, index, closes, bars)
 
 
-def _fill_reason(strategy: Dict, explanation: Dict) -> str:
+def _fill_reason(strategy: dict, explanation: dict) -> str:
     meta = strategy_metadata(strategy)
     tpl = meta["reason_template"]
     try:
         value = explanation.get("value")
-        return tpl.format(period=strategy["entry"].get("period", ""),
-                          value=(f"{value}" if value is not None else "?"))
+        return tpl.format(
+            period=strategy["entry"].get("period", ""),
+            value=(f"{value}" if value is not None else "?"),
+        )
     except (KeyError, IndexError):
         return meta["reason_template"]
 
 
-def build_runners() -> Dict[str, StrategyRunner]:
+def build_runners() -> dict[str, StrategyRunner]:
     return {s["id"]: StrategyRunner(s) for s in STRATEGIES}

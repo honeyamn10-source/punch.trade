@@ -1,13 +1,9 @@
 """AI analyst tests: model detection, prompt whitelisting, offline-safety."""
 
-import json
-
-import pytest
 from fastapi.testclient import TestClient
 
-from app import api
-from app import config
-from app.ai import analyze, build_prompt, detect_model, status
+from app import api, config
+from app.ai import analyze, build_prompt, detect_model
 
 client = TestClient(api.app)
 
@@ -29,8 +25,7 @@ def test_detect_model_ollama_list_fails(monkeypatch):
         stderr = "boom"
 
     monkeypatch.setattr("app.ai.shutil.which", lambda name: "/bin/ollama")
-    monkeypatch.setattr("app.ai.subprocess.run",
-                        lambda *a, **k: Proc())
+    monkeypatch.setattr("app.ai.subprocess.run", lambda *a, **k: Proc())
     info = detect_model()
     assert info["model"] is None
     assert "failed" in info["reason"]
@@ -40,14 +35,12 @@ def test_detect_model_picks_biggest_qwen(monkeypatch):
     class Proc:
         returncode = 0
         stderr = ""
-        stdout = ("NAME            SIZE\n"
-                  "llama3.2       1.2GB\n"
-                  "qwen2.5:3b     2GB\n"
-                  "qwen2.5:7b     4.7GB\n")
+        stdout = (
+            "NAME            SIZE\nllama3.2       1.2GB\nqwen2.5:3b     2GB\nqwen2.5:7b     4.7GB\n"
+        )
 
     monkeypatch.setattr("app.ai.shutil.which", lambda name: "/bin/ollama")
-    monkeypatch.setattr("app.ai.subprocess.run",
-                        lambda *a, **k: Proc())
+    monkeypatch.setattr("app.ai.subprocess.run", lambda *a, **k: Proc())
     assert detect_model()["model"] == "qwen2.5:7b"
 
 
@@ -59,12 +52,18 @@ def test_detect_model_override(monkeypatch):
 
 # --------------------------------------------------------------- prompt --
 def test_prompt_contains_only_whitelisted_fields():
-    strategy = {"id": "rsi-reversal", "name": "RSI Reversal", "symbol": "X",
-                "apiKey": "SECRET-123", "secret": "TOP-SECRET"}
-    research = {"metrics": {"win_rate": 0.5, "net_pnl": 100,
-                            "apiKey": "LEAK"},
-                "qualityGate": {"passed": True, "score": 60},
-                "secretField": "nope"}
+    strategy = {
+        "id": "rsi-reversal",
+        "name": "RSI Reversal",
+        "symbol": "X",
+        "apiKey": "SECRET-123",
+        "secret": "TOP-SECRET",
+    }
+    research = {
+        "metrics": {"win_rate": 0.5, "net_pnl": 100, "apiKey": "LEAK"},
+        "qualityGate": {"passed": True, "score": 60},
+        "secretField": "nope",
+    }
     prompt = build_prompt(strategy, research, None, None)
     assert "SECRET-123" not in prompt
     assert "TOP-SECRET" not in prompt
@@ -89,7 +88,9 @@ def test_analyze_without_model_returns_hint(monkeypatch):
 
 def _fake_httpx(fake_post):
     import types
+
     import app.ai as ai_mod
+
     fake = types.SimpleNamespace(post=fake_post)
     ai_mod.httpx = fake
     return fake
@@ -117,8 +118,7 @@ def test_analyze_success_path(monkeypatch):
         def json(self):
             return {"response": "VERDICT: PASS\nSTRENGTHS: good PF"}
 
-    monkeypatch.setattr("app.ai.detect_model",
-                        lambda: {"model": "qwen2.5:7b", "reason": None})
+    monkeypatch.setattr("app.ai.detect_model", lambda: {"model": "qwen2.5:7b", "reason": None})
     _fake_httpx(lambda *a, **k: Resp())
     r = analyze({"id": "x"}, research={})
     assert r["analysis"].startswith("VERDICT")

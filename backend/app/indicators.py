@@ -9,16 +9,15 @@ open/high/low/close/volume/ts and return a list aligned to the input
 from __future__ import annotations
 
 import math
-from typing import List, Optional
 
 
-def _require_finite(values: List[float], name: str) -> None:
+def _require_finite(values: list[float], name: str) -> None:
     for i, v in enumerate(values):
         if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
             raise ValueError(f"{name}: non-finite input at index {i}")
 
 
-def _require_bar_finite(bars: List[dict], name: str) -> None:
+def _require_bar_finite(bars: list[dict], name: str) -> None:
     for i, b in enumerate(bars):
         for key in ("open", "high", "low", "close", "volume"):
             v = b.get(key)
@@ -26,13 +25,13 @@ def _require_bar_finite(bars: List[dict], name: str) -> None:
                 raise ValueError(f"{name}: non-finite {key} at bar {i}")
 
 
-def closes(bars: List[dict]) -> List[float]:
+def closes(bars: list[dict]) -> list[float]:
     return [b["close"] for b in bars]
 
 
-def sma(values: List[float], period: int) -> List[Optional[float]]:
+def sma(values: list[float], period: int) -> list[float | None]:
     _require_finite(values, "sma")
-    out: List[Optional[float]] = [None] * len(values)
+    out: list[float | None] = [None] * len(values)
     running = 0.0
     for i, v in enumerate(values):
         running += v
@@ -43,9 +42,9 @@ def sma(values: List[float], period: int) -> List[Optional[float]]:
     return out
 
 
-def ema(values: List[float], period: int) -> List[Optional[float]]:
+def ema(values: list[float], period: int) -> list[float | None]:
     _require_finite(values, "ema")
-    out: List[Optional[float]] = [None] * len(values)
+    out: list[float | None] = [None] * len(values)
     if not values:
         return out
     k = 2.0 / (period + 1)
@@ -57,13 +56,13 @@ def ema(values: List[float], period: int) -> List[Optional[float]]:
     return out
 
 
-def rsi(values: List[float], period: int = 14) -> List[Optional[float]]:
+def rsi(values: list[float], period: int = 14) -> list[float | None]:
     _require_finite(values, "rsi")
-    out: List[Optional[float]] = [None] * len(values)
+    out: list[float | None] = [None] * len(values)
     if len(values) < period + 1:
         return out
-    gains: List[float] = []
-    losses: List[float] = []
+    gains: list[float] = []
+    losses: list[float] = []
     for i in range(1, len(values)):
         change = values[i] - values[i - 1]
         gains.append(max(change, 0.0))
@@ -89,27 +88,28 @@ def _rsi_from_avgs(avg_gain: float, avg_loss: float) -> float:
     return 100.0 - (100.0 / (1.0 + rs))
 
 
-def crossed_below(series: List[Optional[float]], index: int, level: float) -> bool:
+def crossed_below(series: list[float | None], index: int, level: float) -> bool:
     """True when series crosses below `level` at `index`."""
     if index < 1 or series[index] is None or series[index - 1] is None:
         return False
     return series[index - 1] >= level and series[index] < level
 
 
-def crossed_above(series: List[Optional[float]], index: int, level: float) -> bool:
+def crossed_above(series: list[float | None], index: int, level: float) -> bool:
     """True when series crosses above `level` at `index`."""
     if index < 1 or series[index] is None or series[index - 1] is None:
         return False
     return series[index - 1] <= level and series[index] > level
 
 
-def macd(values: List[float], fast: int = 12, slow: int = 26,
-         signal: int = 9) -> List[Optional[float]]:
+def macd(
+    values: list[float], fast: int = 12, slow: int = 26, signal: int = 9
+) -> list[float | None]:
     """MACD histogram: macd_line - signal_line (crosses of the histogram
     through 0 are the classic buy/sell triggers)."""
     fast_ema = ema(values, fast)
     slow_ema = ema(values, slow)
-    macd_line: List[Optional[float]] = [None] * len(values)
+    macd_line: list[float | None] = [None] * len(values)
     for i in range(len(values)):
         if fast_ema[i] is not None and slow_ema[i] is not None:
             macd_line[i] = fast_ema[i] - slow_ema[i]
@@ -117,7 +117,7 @@ def macd(values: List[float], fast: int = 12, slow: int = 26,
     if not valid:
         return [None] * len(values)
     signal_line = ema(valid, signal)
-    out: List[Optional[float]] = [None] * len(values)
+    out: list[float | None] = [None] * len(values)
     offset = len(values) - len(signal_line)
     for j, v in enumerate(signal_line):
         if v is not None:
@@ -125,37 +125,38 @@ def macd(values: List[float], fast: int = 12, slow: int = 26,
     return out
 
 
-def bollinger(values: List[float], period: int = 20,
-              mult: float = 2.0) -> Dict[str, List[Optional[float]]]:
+def bollinger(
+    values: list[float], period: int = 20, mult: float = 2.0
+) -> dict[str, list[float | None]]:
     """Bollinger bands. Returns {"upper": [...], "mid": [...], "lower": [...]}."""
     mid = sma(values, period)
-    upper: List[Optional[float]] = [None] * len(values)
-    lower: List[Optional[float]] = [None] * len(values)
+    upper: list[float | None] = [None] * len(values)
+    lower: list[float | None] = [None] * len(values)
     for i in range(period - 1, len(values)):
-        window = values[i - period + 1: i + 1]
+        window = values[i - period + 1 : i + 1]
         mean = mid[i]
         var = sum((v - mean) ** 2 for v in window) / period
-        sd = var ** 0.5
+        sd = var**0.5
         upper[i] = mean + mult * sd
         lower[i] = mean - mult * sd
     return {"upper": upper, "mid": mid, "lower": lower}
 
 
-def donchian(values: List[float], period: int = 20) -> Dict[str, List[Optional[float]]]:
+def donchian(values: list[float], period: int = 20) -> dict[str, list[float | None]]:
     """Donchian channels: rolling high/low over `period` bars (turtle system)."""
-    hi: List[Optional[float]] = [None] * len(values)
-    lo: List[Optional[float]] = [None] * len(values)
+    hi: list[float | None] = [None] * len(values)
+    lo: list[float | None] = [None] * len(values)
     for i in range(period - 1, len(values)):
-        window = values[i - period + 1: i + 1]
+        window = values[i - period + 1 : i + 1]
         hi[i] = max(window)
         lo[i] = min(window)
     return {"high": hi, "low": lo}
 
 
-def vwap(bars: List[dict], period: int = 20) -> List[Optional[float]]:
-    _require_bar_finite(bars, 'vwap')
+def vwap(bars: list[dict], period: int = 20) -> list[float | None]:
+    _require_bar_finite(bars, "vwap")
     """Rolling volume-weighted average price (typical price weighted)."""
-    out: List[Optional[float]] = [None] * len(bars)
+    out: list[float | None] = [None] * len(bars)
     cum_pv = 0.0
     cum_v = 0.0
     for i, b in enumerate(bars):
@@ -174,8 +175,8 @@ def vwap(bars: List[dict], period: int = 20) -> List[Optional[float]]:
     return out
 
 
-def _wilder_smooth(values: List[float], period: int) -> List[float]:
-    out: List[float] = []
+def _wilder_smooth(values: list[float], period: int) -> list[float]:
+    out: list[float] = []
     if not values:
         return out
     prev = values[0]
@@ -186,59 +187,64 @@ def _wilder_smooth(values: List[float], period: int) -> List[float]:
     return out
 
 
-def atr(bars: List[dict], period: int = 14) -> List[Optional[float]]:
-    _require_bar_finite(bars, 'atr')
+def atr(bars: list[dict], period: int = 14) -> list[float | None]:
+    _require_bar_finite(bars, "atr")
     """Average True Range (Wilder). Classic volatility measure."""
     n = len(bars)
-    out: List[Optional[float]] = [None] * n
+    out: list[float | None] = [None] * n
     if n < period + 1:
         return out
-    trs: List[float] = []
+    trs: list[float] = []
     for i in range(1, n):
-        h, l, c_prev = bars[i]["high"], bars[i]["low"], bars[i - 1]["close"]
-        trs.append(max(h - l, abs(h - c_prev), abs(l - c_prev)))
+        h, lo, c_prev = bars[i]["high"], bars[i]["low"], bars[i - 1]["close"]
+        trs.append(max(h - lo, abs(h - c_prev), abs(lo - c_prev)))
     smoothed = _wilder_smooth(trs, period)
     for j, s in enumerate(smoothed):
         out[j + 1] = s
     return out
 
 
-def stochastic(bars: List[dict], period: int = 14, smooth_k: int = 3) -> List[Optional[float]]:
-    _require_bar_finite(bars, 'stochastic')
+def stochastic(bars: list[dict], period: int = 14, smooth_k: int = 3) -> list[float | None]:
+    _require_bar_finite(bars, "stochastic")
     """Stochastic %K (fast, smoothed). Values 0-100; <20 oversold, >80 overbought."""
     n = len(bars)
-    out: List[Optional[float]] = [None] * n
+    out: list[float | None] = [None] * n
     if n < period + smooth_k:
         return out
-    raw: List[float] = []
+    raw: list[float] = []
     for i in range(period - 1, n):
-        window = bars[i - period + 1: i + 1]
+        window = bars[i - period + 1 : i + 1]
         hi = max(b["high"] for b in window)
         lo = min(b["low"] for b in window)
         raw.append((bars[i]["close"] - lo) / (hi - lo) * 100 if hi > lo else 50.0)
     for j in range(len(raw) - smooth_k + 1):
-        out[period - 1 + j + smooth_k - 1] = sum(raw[j: j + smooth_k]) / smooth_k
+        out[period - 1 + j + smooth_k - 1] = sum(raw[j : j + smooth_k]) / smooth_k
     return out
 
 
-def adx(bars: List[dict], period: int = 14) -> List[Optional[float]]:
-    _require_bar_finite(bars, 'adx')
+def adx(bars: list[dict], period: int = 14) -> list[float | None]:
+    _require_bar_finite(bars, "adx")
     """Average Directional Index (Wilder). >25 = trend, <20 = range."""
     n = len(bars)
-    out: List[Optional[float]] = [None] * n
+    out: list[float | None] = [None] * n
     if n < period * 2:
         return out
-    plus_dm: List[float] = []
-    minus_dm: List[float] = []
-    trs: List[float] = []
+    plus_dm: list[float] = []
+    minus_dm: list[float] = []
+    trs: list[float] = []
     for i in range(1, n):
-        h, l, pc, ph, pl = (bars[i]["high"], bars[i]["low"],
-                            bars[i - 1]["close"], bars[i - 1]["high"], bars[i - 1]["low"])
+        h, lo, pc, ph, pl = (
+            bars[i]["high"],
+            bars[i]["low"],
+            bars[i - 1]["close"],
+            bars[i - 1]["high"],
+            bars[i - 1]["low"],
+        )
         up = h - ph
-        down = pl - l
+        down = pl - lo
         plus_dm.append(up if up > down and up > 0 else 0.0)
         minus_dm.append(down if down > up and down > 0 else 0.0)
-        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
     atr_s = _wilder_smooth(trs, period)
     pdi_s = _wilder_smooth(plus_dm, period)
     mdi_s = _wilder_smooth(minus_dm, period)

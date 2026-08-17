@@ -16,8 +16,6 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-import uuid
-from typing import Dict, List, Optional
 
 from .base import BrokerAdapter, BrokerError
 
@@ -27,8 +25,11 @@ PRODUCTS = {"MIS": "MIS", "CNC": "CNC", "INTRADAY": "INTRADAY"}
 
 def _post(url: str, payload: dict) -> dict:
     req = urllib.request.Request(
-        url, data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"}, method="POST")
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -36,7 +37,7 @@ def _post(url: str, payload: dict) -> dict:
         try:
             return json.loads(e.read().decode("utf-8"))
         except Exception:
-            raise BrokerError(f"OpenAlgo HTTP {e.code}")
+            raise BrokerError(f"OpenAlgo HTTP {e.code}") from None
 
 
 class OpenAlgoAdapter(BrokerAdapter):
@@ -53,69 +54,124 @@ class OpenAlgoAdapter(BrokerAdapter):
         return payload
 
     # ---- BrokerAdapter --------------------------------------------------
-    def status(self) -> Dict:
+    def status(self) -> dict:
         try:
             data = _post(f"{self._base}/getorderbook", self._auth({}))
             connected = data.get("status") == "success"
-            return {"broker": "openalgo", "connected": connected,
-                    "account": self.broker, "host": self.host,
-                    "note": "backed by your OpenAlgo instance"}
+            return {
+                "broker": "openalgo",
+                "connected": connected,
+                "account": self.broker,
+                "host": self.host,
+                "note": "backed by your OpenAlgo instance",
+            }
         except BrokerError as e:
-            raise BrokerError(f"OpenAlgo unreachable: {e}")
+            raise BrokerError(f"OpenAlgo unreachable: {e}") from None
 
-    def get_historical_bars(self, symbol: str, interval: str, days: int) -> List[dict]:
-        raise BrokerError(
-            "OpenAlgo provides no historical data. Backtest via kite or binance.")
+    def get_historical_bars(self, symbol: str, interval: str, days: int) -> list[dict]:
+        raise BrokerError("OpenAlgo provides no historical data. Backtest via kite or binance.")
 
-    def place_bracket(self, symbol: str, side: str, qty: int,
-                      entry: float, target: float, stop: float,
-                      market: bool = True, price: Optional[float] = None,
-                      targets: Optional[List[float]] = None) -> Dict:
+    def place_bracket(
+        self,
+        symbol: str,
+        side: str,
+        qty: int,
+        entry: float,
+        target: float,
+        stop: float,
+        market: bool = True,
+        price: float | None = None,
+        targets: list[float] | None = None,
+    ) -> dict:
         """Entry order via OpenAlgo; TP/SL legs attempted as GTT pairs
         (brokers that support GTT), otherwise only the entry is placed —
         the extension still shows the levels for manual exits."""
         action = "BUY" if side.lower() == "buy" else "SELL"
-        payload = self._auth({
-            "symbol": symbol, "exchange": "NSE", "action": action,
-            "pricetype": "MARKET" if market else "LIMIT",
-            "product": "MIS", "quantity": qty,
-            "price": "0" if market else str(price or entry),
-            "trigger_price": "0", "disclosed_quantity": "0", "validity": "DAY",
-        })
+        payload = self._auth(
+            {
+                "symbol": symbol,
+                "exchange": "NSE",
+                "action": action,
+                "pricetype": "MARKET" if market else "LIMIT",
+                "product": "MIS",
+                "quantity": qty,
+                "price": "0" if market else str(price or entry),
+                "trigger_price": "0",
+                "disclosed_quantity": "0",
+                "validity": "DAY",
+            }
+        )
         try:
             data = _post(f"{self._base}/placeorder", payload)
         except BrokerError as e:
-            raise BrokerError(f"OpenAlgo order failed: {e}")
-        legs = [{"leg": "ENTRY", "status": data.get("status", "?"),
-                 "orderId": data.get("orderid"), "message": data.get("message")}]
+            raise BrokerError(f"OpenAlgo order failed: {e}") from None
+        legs = [
+            {
+                "leg": "ENTRY",
+                "status": data.get("status", "?"),
+                "orderId": data.get("orderid"),
+                "message": data.get("message"),
+            }
+        ]
         gtt_ok = False
         if data.get("status") == "success":
             try:
-                tp = _post(f"{self._base}/placeGTT", self._auth({
-                    "symbol": symbol, "exchange": "NSE", "action": "SELL" if action == "BUY" else "BUY",
-                    "product": "MIS", "quantity": qty, "pricetype": "LIMIT",
-                    "price": str(target), "trigger_price": str(target),
-                    "disclosed_quantity": "0", "validity": "DAY",
-                }))
-                sl = _post(f"{self._base}/placeGTT", self._auth({
-                    "symbol": symbol, "exchange": "NSE", "action": "SELL" if action == "BUY" else "BUY",
-                    "product": "MIS", "quantity": qty, "pricetype": "SL-M",
-                    "price": "0", "trigger_price": str(stop),
-                    "disclosed_quantity": "0", "validity": "DAY",
-                }))
-                legs.append({"leg": "TAKE_PROFIT (GTT)", "status": tp.get("status"), "id": tp.get("gtt_id")})
-                legs.append({"leg": "STOP_LOSS (GTT)", "status": sl.get("status"), "id": sl.get("gtt_id")})
+                tp = _post(
+                    f"{self._base}/placeGTT",
+                    self._auth(
+                        {
+                            "symbol": symbol,
+                            "exchange": "NSE",
+                            "action": "SELL" if action == "BUY" else "BUY",
+                            "product": "MIS",
+                            "quantity": qty,
+                            "pricetype": "LIMIT",
+                            "price": str(target),
+                            "trigger_price": str(target),
+                            "disclosed_quantity": "0",
+                            "validity": "DAY",
+                        }
+                    ),
+                )
+                sl = _post(
+                    f"{self._base}/placeGTT",
+                    self._auth(
+                        {
+                            "symbol": symbol,
+                            "exchange": "NSE",
+                            "action": "SELL" if action == "BUY" else "BUY",
+                            "product": "MIS",
+                            "quantity": qty,
+                            "pricetype": "SL-M",
+                            "price": "0",
+                            "trigger_price": str(stop),
+                            "disclosed_quantity": "0",
+                            "validity": "DAY",
+                        }
+                    ),
+                )
+                legs.append(
+                    {"leg": "TAKE_PROFIT (GTT)", "status": tp.get("status"), "id": tp.get("gtt_id")}
+                )
+                legs.append(
+                    {"leg": "STOP_LOSS (GTT)", "status": sl.get("status"), "id": sl.get("gtt_id")}
+                )
                 gtt_ok = tp.get("status") == "success" and sl.get("status") == "success"
             except BrokerError:
                 pass
-        return {"orderId": data.get("orderid", "?"), "status": data.get("status", "?"),
-                "broker": "openalgo", "gttAttached": gtt_ok, "legs": legs}
+        return {
+            "orderId": data.get("orderid", "?"),
+            "status": data.get("status", "?"),
+            "broker": "openalgo",
+            "gttAttached": gtt_ok,
+            "legs": legs,
+        }
 
-    def get_positions(self) -> List[Dict]:
+    def get_positions(self) -> list[dict]:
         try:
             data = _post(f"{self._base}/getpositions", self._auth({}))
         except BrokerError as e:
-            raise BrokerError(f"OpenAlgo positions failed: {e}")
+            raise BrokerError(f"OpenAlgo positions failed: {e}") from None
         if data.get("status") != "success":
             return []
         rows = data.get("data", [])
@@ -128,25 +184,39 @@ class OpenAlgoAdapter(BrokerAdapter):
                 continue
             avg = float(r.get("average_price", 0) or 0)
             ltp = float(r.get("last_price", 0) or 0)
-            out.append({"id": r.get("tradingsymbol"), "symbol": r.get("tradingsymbol"),
-                        "side": "buy" if qty > 0 else "sell", "qty": abs(qty),
-                        "entry": avg, "current": ltp,
-                        "pnl_pct": round((ltp - avg) / avg * 100, 2) if avg else 0.0,
-                        "status": "open"})
+            out.append(
+                {
+                    "id": r.get("tradingsymbol"),
+                    "symbol": r.get("tradingsymbol"),
+                    "side": "buy" if qty > 0 else "sell",
+                    "qty": abs(qty),
+                    "entry": avg,
+                    "current": ltp,
+                    "pnl_pct": round((ltp - avg) / avg * 100, 2) if avg else 0.0,
+                    "status": "open",
+                }
+            )
         return out
 
-    def get_fills(self, since: Optional[float] = None) -> List[Dict]:
+    def get_fills(self, since: float | None = None) -> list[dict]:
         try:
             data = _post(f"{self._base}/getorderbook", self._auth({}))
         except BrokerError as e:
-            raise BrokerError(f"OpenAlgo orderbook failed: {e}")
+            raise BrokerError(f"OpenAlgo orderbook failed: {e}") from None
         rows = data.get("data", [])
         if isinstance(rows, dict):
             rows = rows.get("orders", [])
         out = []
         for r in rows or []:
-            out.append({"id": r.get("orderid"), "symbol": r.get("tradingsymbol"),
-                        "side": r.get("transaction_type", "").lower(),
-                        "qty": r.get("quantity"), "price": r.get("price"),
-                        "status": r.get("status"), "ts": r.get("order_timestamp")})
+            out.append(
+                {
+                    "id": r.get("orderid"),
+                    "symbol": r.get("tradingsymbol"),
+                    "side": r.get("transaction_type", "").lower(),
+                    "qty": r.get("quantity"),
+                    "price": r.get("price"),
+                    "status": r.get("status"),
+                    "ts": r.get("order_timestamp"),
+                }
+            )
         return out

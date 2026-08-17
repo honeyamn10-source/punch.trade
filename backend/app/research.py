@@ -22,12 +22,10 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
 
 from . import pnl as pnl_mod
 from .backtest import ExecutionCostConfig, backtest
 from .market import REGIMES
-from .strategies import get_strategy
 
 
 @dataclass
@@ -52,8 +50,9 @@ class ResearchConfig:
 
 
 # ------------------------------------------------------------ splits ----
-def split_chronological(bars: List[dict], cfg: ResearchConfig
-                        ) -> Tuple[List[dict], List[dict], List[dict]]:
+def split_chronological(
+    bars: list[dict], cfg: ResearchConfig
+) -> tuple[list[dict], list[dict], list[dict]]:
     """Strict chronological train/val/test split by index (never shuffled)."""
     n = len(bars)
     if n < 100:
@@ -66,7 +65,7 @@ def split_chronological(bars: List[dict], cfg: ResearchConfig
     return train, val, test
 
 
-def _run(strategy: Dict, bars: List[dict], costs: ExecutionCostConfig) -> Dict:
+def _run(strategy: dict, bars: list[dict], costs: ExecutionCostConfig) -> dict:
     """Backtest + normalize; raises if not enough data."""
     result = backtest(strategy, bars, costs)
     if "error" in result:
@@ -75,7 +74,7 @@ def _run(strategy: Dict, bars: List[dict], costs: ExecutionCostConfig) -> Dict:
 
 
 # ------------------------------------------------------- walk-forward ----
-def walk_forward(strategy: Dict, bars: List[dict], cfg: ResearchConfig) -> List[Dict]:
+def walk_forward(strategy: dict, bars: list[dict], cfg: ResearchConfig) -> list[dict]:
     """Rolling train->test windows (chronological, expanding train).
 
     The window count adapts to the data: every test slice must hold at
@@ -86,8 +85,7 @@ def walk_forward(strategy: Dict, bars: List[dict], cfg: ResearchConfig) -> List[
     windows = []
     n = len(bars)
     min_train = max(120, n // (cfg.walk_forward_windows + 1))
-    usable = min(cfg.walk_forward_windows,
-                 max(2, (n - min_train) // 60))
+    usable = min(cfg.walk_forward_windows, max(2, (n - min_train) // 60))
     if usable < 2 or n < min_train + 120:
         raise ValueError("not enough bars for walk-forward evaluation")
     step = (n - min_train) // usable
@@ -101,17 +99,19 @@ def walk_forward(strategy: Dict, bars: List[dict], cfg: ResearchConfig) -> List[
             test_stats = _run(strategy, test_bars, costs)["metrics"]
         except ValueError:
             continue
-        windows.append({
-            "window": w,
-            "trainBars": len(train_bars),
-            "testBars": len(test_bars),
-            "trainStartTs": train_bars[0]["ts"],
-            "trainEndTs": train_bars[-1]["ts"],
-            "testStartTs": test_bars[0]["ts"],
-            "testEndTs": test_bars[-1]["ts"],
-            "train": train_stats,
-            "test": test_stats,
-        })
+        windows.append(
+            {
+                "window": w,
+                "trainBars": len(train_bars),
+                "testBars": len(test_bars),
+                "trainStartTs": train_bars[0]["ts"],
+                "trainEndTs": train_bars[-1]["ts"],
+                "testStartTs": test_bars[0]["ts"],
+                "testEndTs": test_bars[-1]["ts"],
+                "train": train_stats,
+                "test": test_stats,
+            }
+        )
     if not windows:
         raise ValueError("no walk-forward windows could be evaluated")
     profitable = sum(1 for wnd in windows if wnd["test"]["net_pnl"] > 0)
@@ -136,7 +136,7 @@ _PERTURBATIONS = (
 )
 
 
-def _set_param(strategy: Dict, path: str, value) -> None:
+def _set_param(strategy: dict, path: str, value) -> None:
     if "." in path:
         section, key = path.split(".", 1)
         strategy[section][key] = value
@@ -144,8 +144,7 @@ def _set_param(strategy: Dict, path: str, value) -> None:
         strategy[path] = value
 
 
-def parameter_stability(strategy: Dict, bars: List[dict],
-                        cfg: ResearchConfig) -> Dict:
+def parameter_stability(strategy: dict, bars: list[dict], cfg: ResearchConfig) -> dict:
     """Small perturbations of each tunable -> result spread on the
     train+val slice (validation alone can be too small to backtest)."""
     costs = cfg.costs
@@ -173,13 +172,15 @@ def parameter_stability(strategy: Dict, bars: List[dict],
             stats = _run(probe, val, costs)["metrics"]
         except (ValueError, KeyError, TypeError):
             continue
-        checks.append({
-            "param": path,
-            "value": new_value,
-            "netPnl": stats["net_pnl"],
-            "winRate": stats["win_rate"],
-            "profitFactor": stats["profit_factor"],
-        })
+        checks.append(
+            {
+                "param": path,
+                "value": new_value,
+                "netPnl": stats["net_pnl"],
+                "winRate": stats["win_rate"],
+                "profitFactor": stats["profit_factor"],
+            }
+        )
 
     nets = [c["netPnl"] for c in checks] + [base_net]
     mean = sum(nets) / len(nets)
@@ -187,13 +188,13 @@ def parameter_stability(strategy: Dict, bars: List[dict],
     return {
         "base": base,
         "variants": checks,
-        "spread": round(spread, 3),       # relative spread of net pnl
-        "stable": spread < 1.5,           # < 150% relative spread
+        "spread": round(spread, 3),  # relative spread of net pnl
+        "stable": spread < 1.5,  # < 150% relative spread
     }
 
 
 # ----------------------------------------------------------- bootstrap ----
-def bootstrap_expectancy(trades: List[dict], cfg: ResearchConfig) -> Dict:
+def bootstrap_expectancy(trades: list[dict], cfg: ResearchConfig) -> dict:
     """Resample completed-trade PnLs with replacement (seeded) to estimate
     the distribution of per-trade expectancy."""
     if len(trades) < 5:
@@ -206,9 +207,10 @@ def bootstrap_expectancy(trades: List[dict], cfg: ResearchConfig) -> Dict:
         sample = [pnls[rng.randrange(n)] for _ in range(n)]
         expectancies.append(sum(sample) / n)
     expectancies.sort()
+
     def pct(p):
-        return round(expectancies[min(len(expectancies) - 1,
-                                      int(len(expectancies) * p))], 2)
+        return round(expectancies[min(len(expectancies) - 1, int(len(expectancies) * p))], 2)
+
     positive = sum(1 for e in expectancies if e > 0) / len(expectancies)
     return {
         "iterations": cfg.bootstrap_iterations,
@@ -222,9 +224,9 @@ def bootstrap_expectancy(trades: List[dict], cfg: ResearchConfig) -> Dict:
 
 
 # ------------------------------------------------- regime performance ----
-def regime_performance(trades: List[dict]) -> List[Dict]:
+def regime_performance(trades: list[dict]) -> list[dict]:
     """Per-regime stats from completed trades (regime recorded at signal)."""
-    groups: Dict[str, List[dict]] = {r: [] for r in REGIMES}
+    groups: dict[str, list[dict]] = {r: [] for r in REGIMES}
     for t in trades:
         groups.get(t.get("regime", "UNKNOWN"), []).append(t)
     out = []
@@ -232,55 +234,96 @@ def regime_performance(trades: List[dict]) -> List[Dict]:
         group = groups[regime]
         if not group:
             continue
-        stats = pnl_mod.summary_stats([
-            {"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-             "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]}
-            for t in group])
+        stats = pnl_mod.summary_stats(
+            [
+                {
+                    "net_pnl": t["netPnl"],
+                    "net_pnl_pct": t["netPnlPct"],
+                    "entry_ts": t["entryTs"],
+                    "exit_ts": t["exitTs"],
+                }
+                for t in group
+            ]
+        )
         stats["regime"] = regime
         out.append(stats)
     return sorted(out, key=lambda r: -r["trades"])
 
 
 # -------------------------------------------------------- quality gate ----
-def quality_gate(splits: Tuple[List[dict], List[dict], List[dict]],
-                 wf: Dict, stability: Dict, bootstrap: Dict,
-                 cfg: ResearchConfig) -> Dict:
+def quality_gate(
+    splits: tuple[list[dict], list[dict], list[dict]],
+    wf: dict,
+    stability: dict,
+    bootstrap: dict,
+    cfg: ResearchConfig,
+) -> dict:
     """Composite gate: every check must pass for a strategy to be promoted
     past 'RESEARCHED'. Scores 0-100."""
     train, val, test = splits
-    train_stats = pnl_mod.summary_stats([
-        {"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-         "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]}
-        for t in train])
-    val_stats = pnl_mod.summary_stats([
-        {"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-         "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]}
-        for t in val])
-    test_stats = pnl_mod.summary_stats([
-        {"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-         "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]}
-        for t in test])
+    train_stats = pnl_mod.summary_stats(
+        [
+            {
+                "net_pnl": t["netPnl"],
+                "net_pnl_pct": t["netPnlPct"],
+                "entry_ts": t["entryTs"],
+                "exit_ts": t["exitTs"],
+            }
+            for t in train
+        ]
+    )
+    val_stats = pnl_mod.summary_stats(
+        [
+            {
+                "net_pnl": t["netPnl"],
+                "net_pnl_pct": t["netPnlPct"],
+                "entry_ts": t["entryTs"],
+                "exit_ts": t["exitTs"],
+            }
+            for t in val
+        ]
+    )
+    test_stats = pnl_mod.summary_stats(
+        [
+            {
+                "net_pnl": t["netPnl"],
+                "net_pnl_pct": t["netPnlPct"],
+                "entry_ts": t["entryTs"],
+                "exit_ts": t["exitTs"],
+            }
+            for t in test
+        ]
+    )
 
     bootstrap_error = "error" in bootstrap
-    bootstrap_detail = (bootstrap.get("error")
-                        if bootstrap_error
-                        else f"P(positive expectancy) = {bootstrap['probPositive']}")
+    bootstrap_detail = (
+        bootstrap.get("error")
+        if bootstrap_error
+        else f"P(positive expectancy) = {bootstrap['probPositive']}"
+    )
     checks = [
-        ("train sample size", train_stats["trades"] >= cfg.min_trades_per_split,
-         f"{train_stats['trades']} trades (need >= {cfg.min_trades_per_split})"),
-        ("val sample size", val_stats["trades"] >= max(3, cfg.min_trades_per_split // 2),
-         f"{val_stats['trades']} trades"),
-        ("val edge positive", val_stats["net_pnl"] > 0,
-         f"net_pnl {val_stats['net_pnl']}"),
-        ("test edge positive", test_stats["net_pnl"] > 0,
-         f"net_pnl {test_stats['net_pnl']}"),
-        ("walk-forward consistency", wf["consistency"] >= 0.5,
-         f"{wf['profitableWindows']}/{wf['totalWindows']} windows profitable"),
-        ("parameter stability", stability["stable"],
-         f"relative spread {stability['spread']}"),
-        ("bootstrap edge real",
-         (not bootstrap_error) and bootstrap["realEdge"],
-         bootstrap_detail,
+        (
+            "train sample size",
+            train_stats["trades"] >= cfg.min_trades_per_split,
+            f"{train_stats['trades']} trades (need >= {cfg.min_trades_per_split})",
+        ),
+        (
+            "val sample size",
+            val_stats["trades"] >= max(3, cfg.min_trades_per_split // 2),
+            f"{val_stats['trades']} trades",
+        ),
+        ("val edge positive", val_stats["net_pnl"] > 0, f"net_pnl {val_stats['net_pnl']}"),
+        ("test edge positive", test_stats["net_pnl"] > 0, f"net_pnl {test_stats['net_pnl']}"),
+        (
+            "walk-forward consistency",
+            wf["consistency"] >= 0.5,
+            f"{wf['profitableWindows']}/{wf['totalWindows']} windows profitable",
+        ),
+        ("parameter stability", stability["stable"], f"relative spread {stability['spread']}"),
+        (
+            "bootstrap edge real",
+            (not bootstrap_error) and bootstrap["realEdge"],
+            bootstrap_detail,
         ),
     ]
     passed = [c for c in checks if c[1]]
@@ -289,13 +332,14 @@ def quality_gate(splits: Tuple[List[dict], List[dict], List[dict]],
         "passed": len(passed) == len(checks),
         "score": score,
         "checks": [{"name": n, "passed": p, "detail": d} for n, p, d in checks],
-        "train": train_stats, "val": val_stats, "test": test_stats,
+        "train": train_stats,
+        "val": val_stats,
+        "test": test_stats,
     }
 
 
 # --------------------------------------------------------- full report ----
-def research_report(strategy: Dict, bars: List[dict],
-                    cfg: Optional[ResearchConfig] = None) -> Dict:
+def research_report(strategy: dict, bars: list[dict], cfg: ResearchConfig | None = None) -> dict:
     """The complete research dossier for one strategy."""
     cfg = cfg or ResearchConfig()
     splits = split_chronological(bars, cfg)
@@ -314,25 +358,40 @@ def research_report(strategy: Dict, bars: List[dict],
     all_trades = trade_lists["train"] + trade_lists["val"] + trade_lists["test"]
     try:
         bootstrap = bootstrap_expectancy(
-            [{"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-              "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]} for t in all_trades],
-            cfg)
+            [
+                {
+                    "net_pnl": t["netPnl"],
+                    "net_pnl_pct": t["netPnlPct"],
+                    "entry_ts": t["entryTs"],
+                    "exit_ts": t["exitTs"],
+                }
+                for t in all_trades
+            ],
+            cfg,
+        )
     except ValueError as e:
         bootstrap = {"error": str(e)}
     regimes = regime_performance(all_trades)
     gate = quality_gate(
         [trade_lists["train"], trade_lists["val"], trade_lists["test"]],
-        wf, stability, bootstrap, cfg)
+        wf,
+        stability,
+        bootstrap,
+        cfg,
+    )
 
     return {
         "strategyId": strategy["id"],
         "strategyName": strategy["name"],
         "strategyVersion": strategy.get("version", "1.0.0"),
-        "config": {"trainPct": cfg.train_pct, "valPct": cfg.val_pct,
-                   "testPct": cfg.test_pct,
-                   "walkForwardWindows": cfg.walk_forward_windows,
-                   "bootstrapIterations": cfg.bootstrap_iterations,
-                   "seed": cfg.seed},
+        "config": {
+            "trainPct": cfg.train_pct,
+            "valPct": cfg.val_pct,
+            "testPct": cfg.test_pct,
+            "walkForwardWindows": cfg.walk_forward_windows,
+            "bootstrapIterations": cfg.bootstrap_iterations,
+            "seed": cfg.seed,
+        },
         "sample": {
             "bars": len(bars),
             "startTs": bars[0]["ts"],
@@ -343,21 +402,45 @@ def research_report(strategy: Dict, bars: List[dict],
             "tradesTrain": len(trade_lists["train"]),
             "tradesVal": len(trade_lists["val"]),
             "tradesTest": len(trade_lists["test"]),
-            "quality": "OK" if (len(trade_lists["train"]) + len(trade_lists["val"]) + len(trade_lists["test"])) >= cfg.min_trades_per_split * 2 else "DEGRADED",
+            "quality": "OK"
+            if (len(trade_lists["train"]) + len(trade_lists["val"]) + len(trade_lists["test"]))
+            >= cfg.min_trades_per_split * 2
+            else "DEGRADED",
         },
         "splits": {
-            "train": pnl_mod.summary_stats([
-                {"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-                 "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]}
-                for t in trade_lists["train"]]),
-            "val": pnl_mod.summary_stats([
-                {"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-                 "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]}
-                for t in trade_lists["val"]]),
-            "test": pnl_mod.summary_stats([
-                {"net_pnl": t["netPnl"], "net_pnl_pct": t["netPnlPct"],
-                 "entry_ts": t["entryTs"], "exit_ts": t["exitTs"]}
-                for t in trade_lists["test"]]),
+            "train": pnl_mod.summary_stats(
+                [
+                    {
+                        "net_pnl": t["netPnl"],
+                        "net_pnl_pct": t["netPnlPct"],
+                        "entry_ts": t["entryTs"],
+                        "exit_ts": t["exitTs"],
+                    }
+                    for t in trade_lists["train"]
+                ]
+            ),
+            "val": pnl_mod.summary_stats(
+                [
+                    {
+                        "net_pnl": t["netPnl"],
+                        "net_pnl_pct": t["netPnlPct"],
+                        "entry_ts": t["entryTs"],
+                        "exit_ts": t["exitTs"],
+                    }
+                    for t in trade_lists["val"]
+                ]
+            ),
+            "test": pnl_mod.summary_stats(
+                [
+                    {
+                        "net_pnl": t["netPnl"],
+                        "net_pnl_pct": t["netPnlPct"],
+                        "entry_ts": t["entryTs"],
+                        "exit_ts": t["exitTs"],
+                    }
+                    for t in trade_lists["test"]
+                ]
+            ),
         },
         "walkForward": wf,
         "parameterStability": stability,

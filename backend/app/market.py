@@ -16,14 +16,19 @@ from __future__ import annotations
 import dataclasses
 import math
 import time
-from typing import Dict, List, Optional
 
 TIMEFRAMES = ("1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d")
 
 # seconds per timeframe (approximation used for staleness thresholds)
 TIMEFRAME_SECONDS = {
-    "1m": 60, "3m": 180, "5m": 300, "15m": 900,
-    "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400,
+    "1m": 60,
+    "3m": 180,
+    "5m": 300,
+    "15m": 900,
+    "30m": 1800,
+    "1h": 3600,
+    "4h": 14400,
+    "1d": 86400,
 }
 
 # strategy evaluation default: closed candles only unless the strategy
@@ -39,14 +44,34 @@ def normalize_timeframe(tf: str) -> str:
     """Map provider-specific timeframe labels onto the canonical set."""
     t = str(tf).strip().lower()
     aliases = {
-        "1": "1m", "1m": "1m", "m1": "1m", "minute": "1m",
-        "3": "3m", "3m": "3m", "m3": "3m",
-        "5": "5m", "5m": "5m", "m5": "5m", "5min": "5m",
-        "15": "15m", "15m": "15m", "m15": "15m",
-        "30": "30m", "30m": "30m", "m30": "30m",
-        "1h": "1h", "h1": "1h", "60m": "1h", "60": "1h",
-        "4h": "4h", "h4": "4h", "240m": "4h",
-        "1d": "1d", "d": "1d", "1D": "1d", "day": "1d",
+        "1": "1m",
+        "1m": "1m",
+        "m1": "1m",
+        "minute": "1m",
+        "3": "3m",
+        "3m": "3m",
+        "m3": "3m",
+        "5": "5m",
+        "5m": "5m",
+        "m5": "5m",
+        "5min": "5m",
+        "15": "15m",
+        "15m": "15m",
+        "m15": "15m",
+        "30": "30m",
+        "30m": "30m",
+        "m30": "30m",
+        "1h": "1h",
+        "h1": "1h",
+        "60m": "1h",
+        "60": "1h",
+        "4h": "4h",
+        "h4": "4h",
+        "240m": "4h",
+        "1d": "1d",
+        "d": "1d",
+        "1D": "1d",
+        "day": "1d",
     }
     tf = aliases.get(t)
     if tf is None:
@@ -55,8 +80,9 @@ def normalize_timeframe(tf: str) -> str:
 
 
 def _finite(*values: float) -> bool:
-    return all(isinstance(v, (int, float)) and not isinstance(v, bool)
-               and math.isfinite(v) for v in values)
+    return all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -79,7 +105,7 @@ class Candle:
         return dataclasses.asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Candle":
+    def from_dict(cls, d: dict) -> Candle:
         return cls(
             symbol=str(d.get("symbol", "")),
             timeframe=normalize_timeframe(d.get("timeframe", "5m")),
@@ -95,8 +121,9 @@ class Candle:
         )
 
     @classmethod
-    def from_legacy_bar(cls, symbol: str, bar: dict,
-                        timeframe: str = "5m", source: str = "legacy") -> "Candle":
+    def from_legacy_bar(
+        cls, symbol: str, bar: dict, timeframe: str = "5m", source: str = "legacy"
+    ) -> Candle:
         """Wrap the old {ts,open,high,low,close,volume} dict format.
 
         ``ts`` is the candle's CLOSE timestamp (provider convention), so the
@@ -105,14 +132,21 @@ class Candle:
         """
         tf = normalize_timeframe(timeframe)
         ts = float(bar.get("ts", 0))
-        return cls(symbol=symbol, timeframe=tf,
-                   open_time=ts - TIMEFRAME_SECONDS[tf], close_time=ts,
-                   closed=True, source=source,
-                   open=float(bar["open"]), high=float(bar["high"]),
-                   low=float(bar["low"]), close=float(bar["close"]),
-                   volume=float(bar.get("volume", 0.0)))
+        return cls(
+            symbol=symbol,
+            timeframe=tf,
+            open_time=ts - TIMEFRAME_SECONDS[tf],
+            close_time=ts,
+            closed=True,
+            source=source,
+            open=float(bar["open"]),
+            high=float(bar["high"]),
+            low=float(bar["low"]),
+            close=float(bar["close"]),
+            volume=float(bar.get("volume", 0.0)),
+        )
 
-    def validate(self) -> "Candle":
+    def validate(self) -> Candle:
         validate_candle(self)
         return self
 
@@ -125,16 +159,16 @@ def validate_candle(c: Candle) -> None:
         normalize_timeframe(c.timeframe)
     except MarketDataError:
         raise
-    if not _finite(c.open, c.high, c.low, c.close, c.volume,
-                   c.open_time, c.close_time):
+    if not _finite(c.open, c.high, c.low, c.close, c.volume, c.open_time, c.close_time):
         raise MarketDataError(f"non-finite candle values for {c.symbol}")
     if c.volume < 0:
         raise MarketDataError(f"negative volume for {c.symbol}")
     if c.close_time <= c.open_time:
         raise MarketDataError(f"close_time <= open_time for {c.symbol}")
     if c.high < c.open or c.high < c.close or c.high < c.low:
-        raise MarketDataError(f"high < open/close/low for {c.symbol} "
-                              f"({c.high} vs {c.open}/{c.close}/{c.low})")
+        raise MarketDataError(
+            f"high < open/close/low for {c.symbol} ({c.high} vs {c.open}/{c.close}/{c.low})"
+        )
     if c.low > c.open or c.low > c.close:
         raise MarketDataError(f"low > open/close for {c.symbol}")
 
@@ -143,12 +177,12 @@ class DataQualityTracker:
     """Tracks per-symbol data quality while bars stream in."""
 
     def __init__(self):
-        self.bars: Dict[str, int] = {}
-        self.missing: Dict[str, int] = {}
-        self.duplicates: Dict[str, int] = {}
-        self.out_of_order: Dict[str, int] = {}
-        self.invalid: Dict[str, int] = {}
-        self._last_ts: Dict[str, float] = {}
+        self.bars: dict[str, int] = {}
+        self.missing: dict[str, int] = {}
+        self.duplicates: dict[str, int] = {}
+        self.out_of_order: dict[str, int] = {}
+        self.invalid: dict[str, int] = {}
+        self._last_ts: dict[str, float] = {}
 
     def observe(self, c: Candle) -> None:
         sym = c.symbol
@@ -168,10 +202,8 @@ class DataQualityTracker:
         """GOOD / WARNING / BAD / UNKNOWN."""
         if symbol not in self.bars:
             return "UNKNOWN"
-        bad = (self.invalid.get(symbol, 0) > 0
-               or self.out_of_order.get(symbol, 0) > 0)
-        warn = (self.duplicates.get(symbol, 0) > 0
-                or self.missing.get(symbol, 0) > 0)
+        bad = self.invalid.get(symbol, 0) > 0 or self.out_of_order.get(symbol, 0) > 0
+        warn = self.duplicates.get(symbol, 0) > 0 or self.missing.get(symbol, 0) > 0
         if bad:
             return "BAD"
         if warn:
@@ -190,24 +222,29 @@ class DataQualityTracker:
         }
 
 
-def is_fresh(last_ts: float, now: Optional[float] = None,
-             stale_after: float = 60.0) -> bool:
+def is_fresh(last_ts: float, now: float | None = None, stale_after: float = 60.0) -> bool:
     """True when a feed timestamp is within the staleness window."""
     now = now if now is not None else time.time()
     return bool(last_ts) and (now - last_ts) <= stale_after
 
 
 # ------------------------------------------------------------ regime ----
-REGIMES = ("TRENDING_HIGH_VOL", "TRENDING_LOW_VOL",
-           "RANGING_HIGH_VOL", "RANGING_LOW_VOL", "UNKNOWN")
+REGIMES = (
+    "TRENDING_HIGH_VOL",
+    "TRENDING_LOW_VOL",
+    "RANGING_HIGH_VOL",
+    "RANGING_LOW_VOL",
+    "UNKNOWN",
+)
 
 # documented thresholds (5m-bar scale; tune per timeframe if ever needed)
-TREND_MIN_SLOPE = 0.0005    # |SMA20 slope per bar| above this = trending
-VOL_MIN_ATR_PCT = 0.004     # ATR14/close above this = high vol
+TREND_MIN_SLOPE = 0.0005  # |SMA20 slope per bar| above this = trending
+VOL_MIN_ATR_PCT = 0.004  # ATR14/close above this = high vol
 
 
-def regime_of(bars: List[dict], sma_period: int = 20,
-              atr_period: int = 14, lookback: int = 10) -> str:
+def regime_of(
+    bars: list[dict], sma_period: int = 20, atr_period: int = 14, lookback: int = 10
+) -> str:
     """Deterministic regime classifier.
 
     Formulas:

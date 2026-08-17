@@ -15,7 +15,6 @@ import os
 import threading
 import time
 import uuid
-from typing import Dict, Optional
 
 from . import security
 
@@ -25,11 +24,11 @@ EVENTS_LOG = os.path.join(LOG_DIR, "events.jsonl")
 
 started_at = time.time()
 
-_counters: Dict[str, int] = {}
+_counters: dict[str, int] = {}
 _counters_lock = threading.Lock()
 
 # error counters by status class (4xx/5xx)
-_errors: Dict[str, int] = {}
+_errors: dict[str, int] = {}
 _errors_lock = threading.Lock()
 
 
@@ -45,12 +44,12 @@ def error_incr(status_code: int) -> None:
     incr("errors")
 
 
-def counters() -> Dict[str, int]:
+def counters() -> dict[str, int]:
     with _counters_lock:
         return dict(_counters)
 
 
-def errors() -> Dict[str, int]:
+def errors() -> dict[str, int]:
     with _errors_lock:
         return dict(_errors)
 
@@ -59,7 +58,7 @@ def new_request_id() -> str:
     return uuid.uuid4().hex[:16]
 
 
-def log_event(kind: str, payload: Optional[Dict] = None) -> None:
+def log_event(kind: str, payload: dict | None = None) -> None:
     """Append one sanitized JSON line to the event log (best-effort)."""
     rec = {"ts": time.time(), "kind": kind, **({} if payload is None else payload)}
     try:
@@ -71,11 +70,17 @@ def log_event(kind: str, payload: Optional[Dict] = None) -> None:
         pass
 
 
-def log_request(request_id: str, method: str, path: str,
-                status_code: int, ms: float) -> None:
-    log_event("api.request", {
-        "requestId": request_id, "method": method, "path": path,
-        "status": status_code, "ms": round(ms, 1)})
+def log_request(request_id: str, method: str, path: str, status_code: int, ms: float) -> None:
+    log_event(
+        "api.request",
+        {
+            "requestId": request_id,
+            "method": method,
+            "path": path,
+            "status": status_code,
+            "ms": round(ms, 1),
+        },
+    )
 
 
 def uptime() -> float:

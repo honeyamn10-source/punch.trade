@@ -9,9 +9,14 @@ import pytest
 from app import research
 from app.backtest import ExecutionCostConfig
 from app.market import REGIMES
-from app.research import (ResearchConfig, bootstrap_expectancy, quality_gate,
-                          research_report, split_chronological,
-                          walk_forward)
+from app.research import (
+    ResearchConfig,
+    bootstrap_expectancy,
+    quality_gate,
+    research_report,
+    split_chronological,
+    walk_forward,
+)
 from tests.test_core import RSI_STRAT, _bars, _rsi_cross_series
 
 
@@ -73,8 +78,10 @@ def test_parameter_stability_reports_spread():
 
 # ----------------------------------------------------------- bootstrap ----
 def test_bootstrap_seeded_deterministic():
-    trades = [{"net_pnl": p, "net_pnl_pct": p / 100.0, "entry_ts": 0, "exit_ts": 1}
-              for p in (100, -50, 25, -25, 40, -30, 60, -20, 15, -10)]
+    trades = [
+        {"net_pnl": p, "net_pnl_pct": p / 100.0, "entry_ts": 0, "exit_ts": 1}
+        for p in (100, -50, 25, -25, 40, -30, 60, -20, 15, -10)
+    ]
     a = bootstrap_expectancy(trades, CFG)
     b = bootstrap_expectancy(trades, CFG)
     assert a == b  # same seed -> same result
@@ -91,8 +98,9 @@ def test_bootstrap_all_wins_edge_real():
 
 def test_bootstrap_too_few_trades():
     with pytest.raises(ValueError):
-        bootstrap_expectancy([{"net_pnl": 1.0, "net_pnl_pct": 0.01,
-                               "entry_ts": 0, "exit_ts": 1}] * 3, CFG)
+        bootstrap_expectancy(
+            [{"net_pnl": 1.0, "net_pnl_pct": 0.01, "entry_ts": 0, "exit_ts": 1}] * 3, CFG
+        )
 
 
 # ------------------------------------------------------------ regimes ----
@@ -101,8 +109,12 @@ def test_regime_performance_groups_trades():
     result = research.research_report(RSI_STRAT, bars, CFG)
     regimes = result["regimePerformance"]
     total = sum(r["trades"] for r in regimes)
-    assert total == result["sample"]["tradesTrain"] + \
-        result["sample"]["tradesVal"] + result["sample"]["tradesTest"]
+    assert (
+        total
+        == result["sample"]["tradesTrain"]
+        + result["sample"]["tradesVal"]
+        + result["sample"]["tradesTest"]
+    )
     for r in regimes:
         assert r["regime"] in REGIMES
 
@@ -127,8 +139,7 @@ def test_quality_gate_scores():
     gate = rep["qualityGate"]
     assert 0 <= gate["score"] <= 100
     assert len(gate["checks"]) >= 5
-    assert all("passed" in c and "name" in c and "detail" in c
-               for c in gate["checks"])
+    assert all("passed" in c and "name" in c and "detail" in c for c in gate["checks"])
     # every check must be boolean
     assert all(isinstance(c["passed"], bool) for c in gate["checks"])
 

@@ -25,15 +25,17 @@ import os
 import sqlite3
 import threading
 import time
-from typing import Dict, List, Optional
+from contextlib import suppress
 
 from . import config
 
 SCHEMA_VERSION = 2
 
 # ordered migrations: (version, sql) — applied in a transaction, in order
-MIGRATIONS: List[tuple] = [
-    (1, """
+MIGRATIONS: list[tuple] = [
+    (
+        1,
+        """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -78,8 +80,11 @@ CREATE TABLE IF NOT EXISTS strategy_status (
     payload TEXT NOT NULL,
     ts REAL NOT NULL
 );
-"""),
-    (2, """
+""",
+    ),
+    (
+        2,
+        """
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     expires_at REAL NOT NULL,
@@ -87,7 +92,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     ip TEXT NOT NULL DEFAULT '',
     user_agent TEXT NOT NULL DEFAULT ''
 );
-"""),
+""",
+    ),
 ]
 
 # JSONL audit files (relative to DATA_DIR) and the table they import into
@@ -171,7 +177,9 @@ def init_db() -> None:
                 conn.execute("PRAGMA busy_timeout=5000")
                 _local.conn = conn
                 _conns.add(conn)
-            conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+            )
             row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
             current = int(row["value"]) if row else 0
             for version, sql in MIGRATIONS:
@@ -181,7 +189,8 @@ def init_db() -> None:
                     conn.executescript(sql)
                     conn.execute(
                         "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)",
-                        (str(version),))
+                        (str(version),),
+                    )
             _initialized = True
         finally:
             _initializing = False
@@ -192,10 +201,8 @@ def close_all() -> None:
     global _initialized
     with _write_lock:
         for conn in list(_conns):
-            try:
+            with suppress(Exception):
                 conn.close()
-            except Exception:
-                pass
         _conns.clear()
         _local.conn = None
     _initialized = False
@@ -219,7 +226,8 @@ def write_signal(sig: dict) -> None:
     with transaction() as c:
         c.execute(
             "INSERT OR REPLACE INTO signals (id, payload, ts) VALUES (?,?,?)",
-            (str(sid), json.dumps(sig), sig.get("ts") or time.time()))
+            (str(sid), json.dumps(sig), sig.get("ts") or time.time()),
+        )
 
 
 def write_order(rec: dict) -> None:
@@ -230,8 +238,14 @@ def write_order(rec: dict) -> None:
         c.execute(
             "INSERT OR REPLACE INTO orders (id, status, payload, ts, updated_ts) "
             "VALUES (?,?,?,?,?)",
-            (str(oid), rec.get("status", "PENDING"), json.dumps(rec),
-             rec.get("ts") or time.time(), rec.get("updatedTs") or time.time()))
+            (
+                str(oid),
+                rec.get("status", "PENDING"),
+                json.dumps(rec),
+                rec.get("ts") or time.time(),
+                rec.get("updatedTs") or time.time(),
+            ),
+        )
 
 
 def mark_order(order_id: str, new_status: str) -> None:
@@ -239,7 +253,8 @@ def mark_order(order_id: str, new_status: str) -> None:
         c.execute(
             "UPDATE orders SET status=?, payload=json_set(payload,'$.status',?), "
             "updated_ts=? WHERE id=?",
-            (new_status, new_status, time.time(), str(order_id)))
+            (new_status, new_status, time.time(), str(order_id)),
+        )
 
 
 def write_position(pos: dict) -> None:
@@ -249,8 +264,8 @@ def write_position(pos: dict) -> None:
     with transaction() as c:
         c.execute(
             "INSERT OR REPLACE INTO positions (id, status, payload, ts) VALUES (?,?,?,?)",
-            (str(pid), pos.get("status", "open"), json.dumps(pos),
-             pos.get("ts") or time.time()))
+            (str(pid), pos.get("status", "open"), json.dumps(pos), pos.get("ts") or time.time()),
+        )
 
 
 def write_trade(t: dict) -> None:
@@ -260,49 +275,48 @@ def write_trade(t: dict) -> None:
     with transaction() as c:
         c.execute(
             "INSERT OR REPLACE INTO trades (id, payload, ts) VALUES (?,?,?)",
-            (str(tid), json.dumps(t), t.get("exitTs") or t.get("entryTs") or time.time()))
+            (str(tid), json.dumps(t), t.get("exitTs") or t.get("entryTs") or time.time()),
+        )
 
 
 def write_research_run(strategy_id: str, payload: dict) -> None:
     with transaction() as c:
         c.execute(
             "INSERT INTO research_runs (strategy_id, payload, ts) VALUES (?,?,?)",
-            (str(strategy_id), json.dumps(payload), time.time()))
+            (str(strategy_id), json.dumps(payload), time.time()),
+        )
 
 
 def write_strategy_status(sid: str, payload: dict) -> None:
     with transaction() as c:
         c.execute(
             "INSERT OR REPLACE INTO strategy_status (id, payload, ts) VALUES (?,?,?)",
-            (str(sid), json.dumps(payload), time.time()))
+            (str(sid), json.dumps(payload), time.time()),
+        )
 
 
 # -------------------------------------------------------------- reads ----
-def read_signals(limit: int = 100) -> List[dict]:
+def read_signals(limit: int = 100) -> list[dict]:
     conn = get_conn()
-    rows = conn.execute(
-        "SELECT payload FROM signals ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
+    rows = conn.execute("SELECT payload FROM signals ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
     return [json.loads(r["payload"]) for r in reversed(rows)]
 
 
-def read_orders(limit: int = 500) -> List[dict]:
+def read_orders(limit: int = 500) -> list[dict]:
     conn = get_conn()
-    rows = conn.execute(
-        "SELECT payload FROM orders ORDER BY ts LIMIT ?", (limit,)).fetchall()
+    rows = conn.execute("SELECT payload FROM orders ORDER BY ts LIMIT ?", (limit,)).fetchall()
     return [json.loads(r["payload"]) for r in rows]
 
 
-def read_trades(limit: int = 500) -> List[dict]:
+def read_trades(limit: int = 500) -> list[dict]:
     conn = get_conn()
-    rows = conn.execute(
-        "SELECT payload FROM trades ORDER BY ts LIMIT ?", (limit,)).fetchall()
+    rows = conn.execute("SELECT payload FROM trades ORDER BY ts LIMIT ?", (limit,)).fetchall()
     return [json.loads(r["payload"]) for r in rows]
 
 
-def read_positions(limit: int = 500) -> List[dict]:
+def read_positions(limit: int = 500) -> list[dict]:
     conn = get_conn()
-    rows = conn.execute(
-        "SELECT payload FROM positions ORDER BY ts LIMIT ?", (limit,)).fetchall()
+    rows = conn.execute("SELECT payload FROM positions ORDER BY ts LIMIT ?", (limit,)).fetchall()
     return [json.loads(r["payload"]) for r in rows]
 
 
@@ -317,15 +331,19 @@ def _archive_dir() -> str:
     return d
 
 
-def _row_id(table: str, row: dict) -> Optional[str]:
+def _row_id(table: str, row: dict) -> str | None:
     if table == "signals":
         return row.get("id") or row.get("signalId")
     if table == "orders":
         # audit rows carry the broker orderId inside result; fall back to
         # the request idempotency keys so nothing is dropped at import
         result = row.get("result") or {}
-        return (row.get("id") or result.get("orderId")
-                or row.get("signalId") or row.get("clientRequestId"))
+        return (
+            row.get("id")
+            or result.get("orderId")
+            or row.get("signalId")
+            or row.get("clientRequestId")
+        )
     if table == "positions":
         return row.get("id") or row.get("positionId") or row.get("orderId")
     if table == "trades":
@@ -339,7 +357,7 @@ def import_legacy_file(name: str, table: str) -> dict:
     report = {"file": name, "rows": 0, "skipped": 0, "errors": []}
     if not os.path.exists(path):
         return report
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         lines = [ln for ln in f if ln.strip()]
     for i, line in enumerate(lines, start=1):
         try:
@@ -352,20 +370,32 @@ def import_legacy_file(name: str, table: str) -> dict:
             ts = row.get("ts") or row.get("entryTs") or time.time()
             conn = get_conn()
             if table == "signals":
-                conn.execute("INSERT OR REPLACE INTO signals (id, payload, ts) VALUES (?,?,?)",
-                             (str(rid), payload, ts))
+                conn.execute(
+                    "INSERT OR REPLACE INTO signals (id, payload, ts) VALUES (?,?,?)",
+                    (str(rid), payload, ts),
+                )
             elif table == "orders":
-                conn.execute("INSERT OR REPLACE INTO orders (id, status, payload, ts, updated_ts) "
-                             "VALUES (?,?,?,?,?)",
-                             (str(rid), row.get("status", "UNKNOWN"), payload,
-                              row.get("ts") or time.time(), row.get("updatedTs") or time.time()))
+                conn.execute(
+                    "INSERT OR REPLACE INTO orders (id, status, payload, ts, updated_ts) "
+                    "VALUES (?,?,?,?,?)",
+                    (
+                        str(rid),
+                        row.get("status", "UNKNOWN"),
+                        payload,
+                        row.get("ts") or time.time(),
+                        row.get("updatedTs") or time.time(),
+                    ),
+                )
             elif table == "positions":
-                conn.execute("INSERT OR REPLACE INTO positions (id, status, payload, ts) "
-                             "VALUES (?,?,?,?)",
-                             (str(rid), row.get("status", "closed"), payload, ts))
+                conn.execute(
+                    "INSERT OR REPLACE INTO positions (id, status, payload, ts) VALUES (?,?,?,?)",
+                    (str(rid), row.get("status", "closed"), payload, ts),
+                )
             elif table == "trades":
-                conn.execute("INSERT OR REPLACE INTO trades (id, payload, ts) VALUES (?,?,?)",
-                             (str(rid), payload, ts))
+                conn.execute(
+                    "INSERT OR REPLACE INTO trades (id, payload, ts) VALUES (?,?,?)",
+                    (str(rid), payload, ts),
+                )
             report["rows"] += 1
         except Exception as e:  # noqa: BLE001 — one bad line must not kill the import
             report["errors"].append(f"line {i}: {e}")
@@ -377,7 +407,7 @@ def import_legacy_file(name: str, table: str) -> dict:
     return report
 
 
-def archive_legacy(name: str) -> Optional[str]:
+def archive_legacy(name: str) -> str | None:
     """Move a JSONL audit file to data/archive/ (keeps the audit trail)."""
     path = _legacy_path(name)
     if not os.path.exists(path):
@@ -387,13 +417,13 @@ def archive_legacy(name: str) -> Optional[str]:
     return dest
 
 
-def import_legacy_all() -> Dict[str, dict]:
+def import_legacy_all() -> dict[str, dict]:
     """Import every legacy JSONL audit file, then archive them.
 
     Returns {file: report}. Called once at startup; afterwards SQLite is
     the restore source and the JSONL trail starts fresh.
     """
-    report: Dict[str, dict] = {}
+    report: dict[str, dict] = {}
     for name, table in LEGACY_FILES:
         r = import_legacy_file(name, table)
         if r["rows"]:
@@ -413,7 +443,16 @@ def storage_status() -> dict:
         "path": _db_path(),
         "journalMode": mode,
         "schemaVersion": int(row["value"]) if row else 0,
-        "counts": {t: row_count(t) for t in
-                   ("signals", "orders", "positions", "trades",
-                    "research_runs", "strategy_status", "sessions")},
+        "counts": {
+            t: row_count(t)
+            for t in (
+                "signals",
+                "orders",
+                "positions",
+                "trades",
+                "research_runs",
+                "strategy_status",
+                "sessions",
+            )
+        },
     }
