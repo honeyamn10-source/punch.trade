@@ -29,9 +29,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import config, db, execution, obs, risk, security, vault
-from .version import VERSION as APP_VERSION, git_commit
 from .backtest import ExecutionCostConfig, backtest
 from .broker.base import BrokerError
 from .broker.ccxt_bt import CCXTBroker
@@ -42,6 +42,8 @@ from .engine import build_runners
 from .feed import LiveFeed
 from .proxy import router as proxy_router
 from .strategies import STRATEGIES, get_strategy, target_levels
+from .version import VERSION as APP_VERSION
+from .version import git_commit
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data")
 SIGNALS_LOG = os.path.join(DATA_DIR, "signals.json")
@@ -132,6 +134,18 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         status_code=exc.status_code,
         content=_error_envelope(exc, request.state.request_id),
         headers=exc.headers or {},
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Envelope errors raised by the router itself (raw 404/405) so every
+    error response — not just raised FastAPI HTTPExceptions — uses the
+    uniform {error:{code,message,requestId}} shape."""
+    wrapped = HTTPException(status_code=exc.status_code, detail=exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_error_envelope(wrapped, request.state.request_id),
     )
 
 
@@ -1391,7 +1405,10 @@ _OPENAPI_TAGS = [
     },
     {"name": "Orders", "description": "Order placement (idempotent per signal / clientRequestId)."},
     {"name": "Execution", "description": "Order ledger, closed trades and broker reconciliation."},
-    {"name": "Brokers", "description": "Broker adapters: connection, credentials (vault) and status."},
+    {
+        "name": "Brokers",
+        "description": "Broker adapters: connection, credentials (vault) and status.",
+    },
     {"name": "AI", "description": "Local Qwen analyst (offline-safe, whitelist-only prompts)."},
     {"name": "UI", "description": "Dashboard and demo pages."},
     {"name": "WebSocket", "description": "Real-time signal feed (/ws/signals)."},

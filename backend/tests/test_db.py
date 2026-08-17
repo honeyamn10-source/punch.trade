@@ -38,6 +38,37 @@ def test_writes_and_reads_roundtrip():
     assert db.row_count("positions") == 1
     assert db.row_count("research_runs") == 1
     assert db.row_count("strategy_status") == 1
+
+
+def test_backup_roundtrip(tmp_path):
+    """Backup must be readable, schema-intact and preserve record counts."""
+    db.write_signal({"id": "s1", "symbol": "X", "ts": 1.0})
+    db.write_order({"id": "o1", "status": "FILLED", "symbol": "X", "ts": 2.0, "updatedTs": 2.0})
+    db.write_trade({"id": "t1", "netPnl": -5.0, "exitTs": 3.0})
+    db.write_position({"id": "p1", "status": "closed", "ts": 4.0})
+
+    dest = str(tmp_path / "punch-backup.db")
+    report = db.backup(dest)
+
+    assert report["integrity"] == "ok"
+    assert report["schemaVersion"] == db.SCHEMA_VERSION
+    assert report["counts"]["signals"] == 1
+    assert report["counts"]["orders"] == 1
+    assert report["counts"]["trades"] == 1
+    assert report["counts"]["positions"] == 1
+
+    import sqlite3
+
+    conn = sqlite3.connect(dest)
+    try:
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert (
+            conn.execute("SELECT payload FROM signals").fetchone()[0]
+            == '{"id": "s1", "symbol": "X", "ts": 1.0}'
+        )
+        assert conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 1
+    finally:
+        conn.close()
     assert len(db.read_trades()) == 1
     assert len(db.read_positions()) == 1
 

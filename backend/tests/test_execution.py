@@ -97,28 +97,29 @@ def test_stale_submitted_becomes_unknown():
 
 # ----------------------------------------------------- reconciliation ----
 def test_reconcile_paper_ok_via_api():
-    client = TestClient(api.app)
     h = {"X-Punch-Token": "punch-demo-token"}
-    r = client.post(
-        "/api/orders",
-        headers=h,
-        json={
-            "broker": "paper",
-            "symbol": "X",
-            "side": "buy",
-            "qty": 1,
-            "entry": 100.0,
-            "targetPrice": 101.0,
-            "stopLoss": 99.0,
-        },
-    )
-    assert r.status_code == 200
-    order_id = r.json()["result"]["orderId"]
-    assert execution.get_order(order_id)["status"] == "FILLED"
+    with TestClient(api.app) as client:
+        api.feed.last_ts["X"] = time.time()  # X has no strategy, so no bars arrive
+        r = client.post(
+            "/api/orders",
+            headers=h,
+            json={
+                "broker": "paper",
+                "symbol": "X",
+                "side": "buy",
+                "qty": 1,
+                "entry": 100.0,
+                "targetPrice": 101.0,
+                "stopLoss": 99.0,
+            },
+        )
+        assert r.status_code == 200
+        order_id = r.json()["result"]["orderId"]
+        assert execution.get_order(order_id)["status"] == "FILLED"
 
-    rep = client.post("/api/execution/reconcile", headers=h, json={"broker": "paper"}).json()
-    assert rep["ok"] is True
-    assert risk.reconciliation_ok() is True
+        rep = client.post("/api/execution/reconcile", headers=h, json={"broker": "paper"}).json()
+        assert rep["ok"] is True
+        assert risk.reconciliation_ok() is True
 
 
 def test_reconcile_flags_unknown_and_closes_gate():

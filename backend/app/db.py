@@ -218,6 +218,46 @@ def row_count(table: str) -> int:
     return int(conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"])
 
 
+_TABLES = (
+    "signals",
+    "orders",
+    "positions",
+    "trades",
+    "research_runs",
+    "strategy_status",
+    "sessions",
+)
+
+
+def backup(dest: str) -> dict:
+    """Consistent online backup via the SQLite backup API.
+
+    Safe to call while the server is running (WAL). The destination file
+    must not already be open elsewhere. Returns a report so callers/tests
+    can verify: schema version, integrity check and per-table counts.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = get_conn()  # outside the lock: get_conn may need _write_lock itself
+    with _write_lock:
+        dest_conn = _sqlite3.connect(dest)
+        try:
+            conn.backup(dest_conn)
+            integrity = dest_conn.execute("PRAGMA integrity_check").fetchone()[0]
+            counts = {
+                t: int(dest_conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0])
+                for t in _TABLES
+            }
+        finally:
+            dest_conn.close()
+    return {
+        "path": dest,
+        "schemaVersion": SCHEMA_VERSION,
+        "integrity": integrity,
+        "counts": counts,
+    }
+
+
 # ------------------------------------------------------------- writes ----
 def write_signal(sig: dict) -> None:
     sid = sig.get("id") or sig.get("signalId")

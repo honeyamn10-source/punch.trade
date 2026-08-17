@@ -168,7 +168,7 @@ def test_limits():
     assert ei.value.code == "INVALID_PRICE"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def client():
     with TestClient(api.app) as c:
         c.headers["X-Punch-Token"] = config.API_TOKEN
