@@ -38,6 +38,7 @@ class Signal:
         self.ts = time.time()
 
     def to_dict(self) -> dict:
+        from . import config
         return {
             "id": self.id,
             "strategyId": self.strategy_id,
@@ -49,6 +50,7 @@ class Signal:
             "targetPrice": round(self.target_price, 2),
             "stopLoss": round(self.stop_loss, 2),
             "ts": self.ts,
+            "expiresAt": self.ts + config.SIGNAL_TTL_SECONDS,
         }
 
 

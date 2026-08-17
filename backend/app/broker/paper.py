@@ -116,7 +116,8 @@ class PaperBroker(BrokerAdapter):
         p["remaining_qty"] -= qty
         realized = (price - p["entry"]) / p["entry"] * 100
         event = {"id": p["id"], "symbol": p["symbol"], "side": p["side"],
-                 "qty": qty, "entry": p["entry"], "exit_price": round(price, 2),
+                 "qty": qty, "qty_total": p["qty"], "entry": p["entry"],
+                 "exit_price": round(price, 2),
                  "exit": label, "pnl_pct": round(realized, 2),
                  "opened_at": p["opened_at"], "status": "open"}
         if p["remaining_qty"] <= 0:

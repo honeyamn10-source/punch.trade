@@ -56,6 +56,8 @@ class LiveFeed:
         self.on_position_close = on_position_close or (lambda p: None)
         self.candle_interval = candle_interval
         self.bars: Dict[str, List[dict]] = {}
+        self.last_ts: Dict[str, float] = {}  # symbol -> last ingested bar ts
+        self.last_error: Dict[str, str] = {}  # symbol -> last poll error
         self._tasks: List[asyncio.Task] = []
         self._last_ohlcv_ts: Dict[str, float] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -83,8 +85,28 @@ class LiveFeed:
     def symbols(self) -> List[str]:
         return sorted({r.strategy["symbol"] for r in self.runners.values()})
 
+    def health(self) -> List[dict]:
+        """Per-symbol feed health for /api/system/health and the dashboard."""
+        now = time.time()
+        out = []
+        for symbol in self.symbols():
+            last = self.last_ts.get(symbol, 0.0)
+            stale_after = (config.LIVE_FEED_STALE_AFTER
+                           if self.broker.name != "paper" else config.FEED_STALE_AFTER)
+            out.append({
+                "symbol": symbol,
+                "source": self.broker.name,
+                "bars": len(self.bars.get(symbol, [])),
+                "lastBarAgeSec": round(now - last, 1) if last else None,
+                "stale": bool(last) and (now - last) > stale_after,
+                "lastError": self.last_error.get(symbol),
+            })
+        return out
+
     # ---- candle ingestion -----------------------------------------------
     def ingest_bar(self, symbol: str, bar: dict) -> None:
+        self.last_ts[symbol] = bar.get("ts", time.time())
+        self.last_error.pop(symbol, None)
         series = self.bars.setdefault(symbol, [])
         series.append(bar)
         if len(series) > config.MAX_BARS_KEPT:
@@ -110,8 +132,9 @@ class LiveFeed:
                     self.broker.get_historical_bars, symbol, "5m", 30)
                 if bars:
                     self.bars[symbol] = bars[-config.MAX_BARS_KEPT:]
-            except Exception:
-                pass
+                    self.last_ts[symbol] = bars[-1]["ts"]
+            except Exception as e:
+                self.last_error[symbol] = str(e)[:200]
         while True:
             await asyncio.sleep(config.BAR_SECONDS)
             for symbol in self.symbols():
@@ -140,8 +163,8 @@ class LiveFeed:
                         self._last_ohlcv_ts[symbol] = b["ts"]
                 if bars:
                     self._prime(symbol, bars[-config.MAX_BARS_KEPT:])
-            except Exception:
-                pass
+            except Exception as e:
+                self.last_error[symbol] = str(e)[:200]
         while True:
             await asyncio.sleep(15)
             for symbol in self.symbols():
@@ -152,8 +175,8 @@ class LiveFeed:
                         if self._last_ohlcv_ts.get(symbol, 0) < b["ts"]:
                             self._last_ohlcv_ts[symbol] = b["ts"]
                             self.ingest_bar(symbol, b)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.last_error[symbol] = str(e)[:200]
 
     def _prime(self, symbol: str, bars: List[dict]) -> None:
         self.bars[symbol] = bars
