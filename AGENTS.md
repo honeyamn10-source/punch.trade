@@ -22,6 +22,17 @@ the relevant one before touching a subsystem).
 - Smoke: `backend/scripts/smoke.ps1`
 - CI: `.github/workflows/ci.yml` (ruff + pytest with coverage)
 
+## Git workflow
+
+- Origin is `https://github.com/honeyamn10-source/punch.trade.git` (master).
+- **Always push after committing** (`git push`) — leave nothing local-only.
+- Credentials are cached in Windows Credential Manager; if a push ever asks
+  to log in again, the device code appears in the Git Credential Manager
+  window — copy it into Chrome at `github.com/login/device` (the default
+  browser is Brave; the code works in any browser).
+- Line endings are normalized by `.gitattributes` (LF in the repo, CRLF for
+  `.ps1` on Windows) — CRLF warnings at commit time are cosmetic.
+
 ## Versioning
 
 `backend/app/version.py` is the single version source (currently 0.3.0).
