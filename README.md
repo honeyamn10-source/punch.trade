@@ -1,211 +1,183 @@
 # punch.trade
 
-A self-hosted signal platform: strategy engine + backtester + real broker
-execution (Zerodha Kite, Binance, and 34+ Indian brokers via OpenAlgo) with a
-Chrome extension that overlays live signals and one-tap bracket orders on the
-chart pages you already use.
+[![CI](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml/badge.svg)](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](backend/app/version.py)
+[![Python](https://img.shields.io/badge/python-3.11+-blue)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-208%20passing-brightgreen)](backend/tests)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+
+A self-hosted quantitative trading workstation: strategy engine, honest
+backtesting and research, risk-gated execution, and a Chrome extension that
+overlays live signals on the chart pages you already use.
+
+> **Non-custodial by design.** Orders execute through *your* broker account
+> with *your* tokens. punch.trade never holds money — it stores encrypted
+> access tokens at rest and proxies orders. No cloud service, no third
+> parties, no data leaving your machine.
 
 ```
-market data ──> strategy engine ──> Signal ──> WebSocket ──> extension overlay
-                       │                                │
-                   backtest                      PUNCH button
-                  (same code)                         │
-                       │                                v
-                   win rate / drawdown        broker API (user's own account)
+market data ──▶ strategy engine ──▶ signal ──▶ WebSocket ──▶ extension overlay
+                       │
+                   backtest            backtest       PUNCH button
+                   (same code)                          │
+                       │                                 ▼
+                  win rate / drawdown          broker API (your account)
                                               entry + TP + SL as one bracket
 ```
 
-Key design decisions (from the original architecture brief):
+## Features
 
-- **Non-custodial**: orders execute through *your* broker account with *your*
-  tokens. The backend never holds money; it holds encrypted access tokens
-  (Fernet, at rest) and proxies orders.
-- **One evaluation path**: the same `StrategyRunner` drives live bars and
-  backtests, so win-rate/drawdown numbers are not fiction.
-- **Declarative strategies**: configs reference a fixed indicator/condition
-  library — no arbitrary code execution, safe to share.
-- **Adapter pattern**: one internal interface, one adapter per broker.
-- **Multi-level take-profit**: signals carry TP1/TP2/TP3; the backtester and
-  paper broker close equal fractions per level (SL always booked first in
-  backtests). Brokers with single-bracket support use TP1.
-
-## Repo layout
-
-```
-backend/          FastAPI server (REST + WebSocket signal feed)
-  app/
-    engine.py     StrategyRunner — bar-driven, per-symbol dedup state
-    backtest.py   honest execution-cost backtester (next-open entry, no lookahead)
-    research.py   chronological research dossiers (splits, walk-forward, bootstrap)
-    trades.py     CompletedTrade / Fill model — one position = one trade
-    pnl.py        single source of truth for PnL + metrics
-    signals.py    signal state machine (CANDIDATE..CLOSED/REJECTED/EXPIRED)
-    strategy_status.py  lifecycle ladder + composite score (never win-rate-only)
-    execution.py  order ledger + reconciliation + closed-trade booking
-    risk.py       modes, arming, limits, circuit breaker, reconciliation gate
-    security.py   sessions (hash-only), CSRF, rate limits, sanitizer, headers
-    db.py         SQLite store (WAL, migrations, legacy archive-then-import)
-    obs.py        event log, request tracing, counters
-    ai/           local Qwen analyst (auto-detect, whitelist-only, offline-safe)
-    indicators.py SMA / EMA / RSI / MACD / Bollinger / Donchian / VWAP (no deps)
-    strategies.py declarative strategy configs (9 shipped)
-    feed.py       live feeds: paper / binance (CCXT polling) / kite (ticks)
-    broker/       paper.py · kite.py · ccxt_bt.py · openalgo.py
-    vault.py      Fernet-encrypted broker token storage
-    api.py        REST + WS + error envelope + /api/v1 surface
-  static/dashboard.html  full dashboard (signals, research+AI, risk, execution)
-  tests/          pytest suite (181 tests; see docs/TESTING.md)
-  scripts/        smoke.ps1 — boot + end-to-end endpoint smoke test
-extension/        Chrome MV3 extension (overlay + popup)
-docs/             17 markdown docs (see index below)
-.github/workflows/ci.yml
-```
-
-## Documentation (docs/)
-
-| Doc | Covers |
-|---|---|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | system overview, data flow |
-| [API.md](docs/API.md) | endpoints, auth, error envelope, WebSocket |
-| [SECURITY.md](docs/SECURITY.md) | threat model, sessions, CSRF, secrets |
-| [RISK.md](docs/RISK.md) | modes, limits, breaker, reconciliation |
-| [BACKTESTING.md](docs/BACKTESTING.md) | execution-cost model, honesty rules |
-| [RESEARCH.md](docs/RESEARCH.md) | dossiers, walk-forward, bootstrap, gates |
-| [STRATEGIES.md](docs/STRATEGIES.md) | configs, lifecycle ladder, scores |
-| [SIGNALS.md](docs/SIGNALS.md) | generation, deterministic ids, state machine |
-| [EXECUTION.md](docs/EXECUTION.md) | ledger, reconciliation, closed trades |
-| [STORAGE.md](docs/STORAGE.md) | SQLite, migrations, legacy import |
-| [AI_ANALYST.md](docs/AI_ANALYST.md) | local Qwen analyst rules |
-| [DASHBOARD.md](docs/DASHBOARD.md) | SPA sections, auth, refresh |
-| [OBSERVABILITY.md](docs/OBSERVABILITY.md) | event log, request ids, health/metrics |
-| [OPERATIONS.md](docs/OPERATIONS.md) | daily ritual, troubleshooting |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | install, env vars, going live |
-| [TESTING.md](docs/TESTING.md) | test layout, isolation, CI |
-| [CI_AND_SMOKE.md](docs/CI_AND_SMOKE.md) | CI workflow + smoke script |
-| [AUDIT.md](docs/AUDIT.md) | security review findings (history) |
+- **Signal engine** — 9 declarative strategies (RSI reversal, MACD,
+  Bollinger, Donchian, VWAP, golden cross, Stochastic Reversal, ADX Trend
+  Rider, …) over a pure-Python indicator library. One evaluation path for
+  live bars and backtests, so the numbers you see are the numbers you trade.
+- **Honest backtesting** — execution-cost model (commission, slippage,
+  spread), next-open entry with no lookahead, multi-level take-profit with
+  partial fills, SL-first intrabar ordering, and one-position-one-trade PnL
+  accounting (a TP1-then-stop is a **loss**, never a win).
+- **Research layer** — chronological train/val/test splits, adaptive
+  walk-forward consistency, parameter-stability perturbation, seeded
+  Monte-Carlo bootstrap, per-regime performance, and a composite quality
+  gate that decides whether a strategy may go live (never win-rate-only).
+- **Risk gate on every order** — `research`/`paper`/`live` modes with
+  explicit ephemeral arming, signal TTL, idempotency keys, max position /
+  max qty / daily-loss limits, stale-feed detection, a circuit breaker on
+  consecutive losses, and a broker-reconciliation gate for live orders.
+- **Execution** — order-state ledger with typed reconciliation
+  (unknown orders, untracked positions), stale-order detection, and
+  one-position-one-trade closed-trade booking across 36+ brokers:
+  Zerodha Kite, Binance (spot + testnet), and anything behind OpenAlgo.
+- **Chrome extension** — signal overlay + one-tap bracket orders
+  (entry + TP + SL) on Kite/Binance charts and a local demo page.
+- **Full dashboard** — live WebSocket signal stream, positions, execution
+  ledger, per-strategy research dossiers with local AI analysis, risk
+  controls, strategy lifecycle ladder, and system health.
+- **Secure by default** — header-only API auth, dashboard sessions
+  (SHA-256 hashes at rest, CSRF-protected), per-IP rate limits, Fernet
+  vault for broker credentials with one-click key rotation, sanitized
+  structured logs, and security headers on every response.
+- **Observable** — every response carries `X-Request-Id`; errors use a
+  uniform `{error:{code,message,requestId}}` envelope; events land in a
+  sanitized JSONL log; deep health + metrics under `/api/v1`.
 
 ## Quick start (zero cost, 5 minutes)
 
 ```bash
-cd backend
-python -m venv .venv && .venv\Scripts\activate   # or source .venv/bin/activate
+git clone https://github.com/honeyamn10-source/punch.trade.git
+cd punch.trade/backend
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python run.py
 ```
 
-1. Open `http://127.0.0.1:8000/demo` — a fake broker page.
-2. Load the extension: `chrome://extensions` → Developer mode → **Load unpacked**
-   → `extension/` folder.
-3. The overlay appears top-right of the chart. Signals land over WebSocket;
-   hit **PUNCH** to place a bracket order (entry + TP + SL) on the paper broker.
+1. Open `http://127.0.0.1:8000/demo` — a fake broker page for testing.
+2. Load the extension: `chrome://extensions` → Developer mode → **Load
+   unpacked** → the `extension/` folder.
+3. Signals land on the chart via WebSocket; hit **PUNCH** to place a
+   paper bracket order.
 
-Dashboard: `http://127.0.0.1:8000/dashboard` — the zing.trade-style window on
-everything: win rate, net PnL, equity curve, live signals, open/closed
-positions, order audit log, broker connections, a strategy **leaderboard**
-(backtested vs the paper feed, ranked by Sharpe — every losing exit included,
-no cherry-picking), and on-demand backtests per strategy.
+Dashboard: `http://127.0.0.1:8000/dashboard`.
 
-Backtests (real numbers on real data once a broker is connected):
+## Connect real brokers
 
-```powershell
-$h = @{ "X-Punch-Token" = "punch-demo-token" }
-Invoke-RestMethod -Method Post -ContentType "application/json" -Headers $h `
-  -Body '{"broker":"paper","interval":"5m","days":30}' `
-  "http://127.0.0.1:8000/api/strategies/rsi-reversal/backtest"
-```
+| Broker | Coverage | Setup |
+|---|---|---|
+| **Zerodha Kite** | NSE/BSE, BO bracket orders, real historical data | Free API key at `developers.zerodha.com` → login URL → connect in the popup |
+| **Binance** | Spot + testnet, public OHLCV polling | API keys at binance.com; testnet checkbox for fake money |
+| **OpenAlgo** | 34+ Indian brokers (Angel One, Fyers, Dhan, Upstox, …) | Self-host OpenAlgo, connect in the popup |
 
-Every REST call needs the `X-Punch-Token` header (never a URL query
-string); the WebSocket requires an `{"type":"auth","token":...}` message
-within 5 s of connecting. See `docs/SECURITY.md`.
+Real orders require `PUNCH_MODE=live`, a non-default `PUNCH_TOKEN`, and
+explicit per-broker arming (never persisted).
 
-Tests: `python -m pytest backend/tests -q` (also runs in CI on push).
+## Documentation
 
-Quality gates before every release:
-
-```powershell
-cd backend
-python -m pytest tests -q            # full suite (208 tests)
-ruff check .                          # lint
-ruff format --check .                 # formatting
-```
-
-Runs on GitHub Actions too (`.github/workflows/ci.yml`): lint + tests with a
-coverage artifact on every push to `master` / pull request.
-
-## Connect real brokers (all free)
-
-### Zerodha Kite (India, NSE/BSE)
-1. Get an API key + secret at `developers.zerodha.com` (free; requires a Zerodha
-   account).
-2. In the extension popup → *Connect a real broker* → enter API key → **Get
-   login URL** → log in → paste `request_token` from the redirect URL + secret
-   → **Connect Kite**.
-3. Live: the backend subscribes to the Kite ticker websocket and builds candles.
-   Backtests use real NSE historical data. Bracket orders are placed as
-   `product=BO` — one request carries entry + take-profit + stop-loss.
-
-### Binance (global crypto)
-1. Create API keys at binance.com (spot trading) — or use the **testnet**
-   checkbox for fake money.
-2. Paste in the popup → **Connect Binance**.
-3. Live signals: the backend polls public OHLCV (no account needed). The BTC
-   strategy ships by default; add strategies with `*USDT` symbols for others.
-
-### OpenAlgo (Angel One, Fyers, Dhan, Upstox, …)
-1. Self-host OpenAlgo (`pip install openalgo`, it's free), configure broker
-   keys inside OpenAlgo.
-2. Popup → OpenAlgo host + API key + broker → **Connect**.
-3. punch.trade then routes execution through OpenAlgo's unified API (34+
-   brokers), including GTT take-profit/stop-loss legs where supported.
-
-Execution always routes through the selected broker — switch in the popup
-(`paper` / `kite` / `binance` / `openalgo`). **Every order passes the risk
-gate** (`docs/RISK.md`): modes `research`/`paper`/`live`, explicit arming
-for real brokers (never persisted), signal TTL, idempotency keys, position
-and daily-loss limits, stale-feed detection, emergency stop
-(`POST /api/system/stop`). Real orders require `PUNCH_TOKEN` to be a
-non-default value and LIVE mode + arming.
-
-## Hosting (free tiers)
-
-- **Local pilot**: run `python run.py` on your machine; friends load the
-  extension with your server URL. No Chrome Web Store needed (Load unpacked).
-- **24/7 server**: Oracle Cloud *Always Free* — includes a reserved static IP,
-  which also satisfies SEBI's static-IP requirement for algo API access. Deploy
-  with `pip install -r requirements.txt` + a systemd unit / `uvicorn`.
-- **Simplest managed**: Render or Fly.io free tier (note: bind port 8000,
-  change `HOST`/`PORT` in `app/config.py`; HTTPS recommended before real tokens
-  travel over the internet).
-
-## Security & compliance notes
-
-- Broker access tokens are Fernet-encrypted at rest (`data/.secret` key is
-  git-ignored; back it up or lose the vault). The extension only ever holds the
-  punch.trade session token — never broker credentials.
-- Signals and orders are appended to `data/signals.json` / `data/orders.json`
-  — your audit trail.
-- This is built for private use by you and people you trust. Signals with
-  entry/TP/SL are personalized advice in most jurisdictions — SEBI (India),
-  SEC (US), FCA (UK), MAS (SG) all regulate this area. Do not monetize or
-  publicize without local counsel per market.
-
-## API surface
-
-| Endpoint | Purpose |
+| Doc | Covers |
 |---|---|
-| `GET /api/strategies` | strategy list |
-| `GET /api/strategies/leaderboard` | all strategies backtested + ranked (Sharpe, win rate, PF, DD) |
-| `POST /api/strategies/{id}/backtest` | real backtest stats (win rate, drawdown, Sharpe, PF, avg win/loss) |
-| `POST /api/orders` | risk-gated, idempotent bracket order (entry+TP+SL) |
-| `GET /api/positions` · `GET /api/fills` | reconciliation / audit |
-| `GET /api/signals/last` · `GET /api/signals/history` | signal feed / audit trail |
-| `GET /api/analytics` | qty-weighted PnL, equity curve, win rate |
-| `GET /api/candles?symbol=&limit=` | live bars for the chart panel |
-| `POST /api/broker/{kite,binance,openalgo}/connect` | broker onboarding |
-| `GET /api/system/status` | mode, arming, feed health, uptime |
-| `POST /api/system/mode` · `POST /api/system/arm` · `POST /api/system/stop` | execution gates |
-| `WS /ws/signals` | auth-message handshake → snapshot + live signal/position feed |
+| [Architecture](docs/ARCHITECTURE.md) | system overview, data flow |
+| [API Reference](docs/API.md) | endpoints, auth, error envelope, WebSocket |
+| [Security](docs/SECURITY.md) | threat model, sessions, CSRF, secrets |
+| [Risk](docs/RISK.md) | modes, limits, circuit breaker, reconciliation |
+| [Backtesting](docs/BACKTESTING.md) | execution-cost model, honesty rules |
+| [Research](docs/RESEARCH.md) | dossiers, walk-forward, bootstrap, gates |
+| [Strategies](docs/STRATEGIES.md) | configs, lifecycle ladder, scoring |
+| [Signals](docs/SIGNALS.md) | generation, deterministic ids, state machine |
+| [Execution](docs/EXECUTION.md) | ledger, reconciliation, closed trades |
+| [Storage](docs/STORAGE.md) | SQLite, migrations, legacy import |
+| [AI Analyst](docs/AI_ANALYST.md) | local Qwen analyst rules |
+| [Dashboard](docs/DASHBOARD.md) | SPA sections, auth, refresh |
+| [Observability](docs/OBSERVABILITY.md) | event log, request ids, health |
+| [Operations](docs/OPERATIONS.md) | daily ritual, troubleshooting |
+| [Deployment](docs/DEPLOYMENT.md) | install, env vars, going live |
+| [Testing](docs/TESTING.md) | test layout, isolation, CI |
+| [CI & Smoke](docs/CI_AND_SMOKE.md) | CI workflow + smoke script |
 
-All REST endpoints require the `X-Punch-Token` header (default
-`punch-demo-token`, set `PUNCH_TOKEN` in the environment). Full docs in
-`docs/ARCHITECTURE.md`, `docs/RISK.md`, `docs/SECURITY.md`, `docs/AUDIT.md`.
+## Tech stack
+
+- **Backend** — Python 3.11+, FastAPI + Uvicorn, SQLite (WAL), WebSockets
+- **Brokers** — `kiteconnect`, `ccxt`, OpenAlgo REST
+- **Crypto** — Fernet (vault at rest), SHA-256 (session hashes)
+- **Extension** — Chrome Manifest V3
+- **Quality** — ruff (lint + format), pytest + coverage, GitHub Actions CI
+
+## Repository layout
+
+```
+backend/                FastAPI server (REST + WebSocket signal feed)
+  app/
+    engine.py           StrategyRunner — bar-driven, per-symbol dedup state
+    backtest.py         honest execution-cost backtester
+    research.py         chronological research dossiers
+    trades.py           CompletedTrade / Fill model
+    pnl.py              single source of truth for PnL + metrics
+    signals.py          signal state machine
+    strategy_status.py  lifecycle ladder + composite score
+    execution.py        order ledger + reconciliation + closed-trade booking
+    risk.py             modes, arming, limits, breaker, reconciliation gate
+    security.py         sessions, CSRF, rate limits, sanitizer, headers
+    db.py               SQLite store (WAL, migrations, legacy import)
+    obs.py              event log, request tracing, counters
+    ai/                 local Qwen analyst (offline-safe, whitelist-only)
+    indicators.py       SMA / EMA / RSI / MACD / Bollinger / Donchian / VWAP
+    strategies.py       declarative strategy configs (9 shipped)
+    feed.py             live feeds: paper / binance / kite
+    broker/             paper · kite · ccxt_bt · openalgo adapters
+    vault.py            Fernet-encrypted broker token storage
+    api.py              REST + WS + error envelope + /api/v1 surface
+  static/dashboard.html full dashboard
+  tests/                pytest suite (208 tests)
+  scripts/              smoke.ps1 — boot + end-to-end smoke test
+extension/              Chrome MV3 extension (overlay + popup)
+docs/                   17 documentation guides
+.github/workflows/ci.yml
+```
+
+## Quality
+
+```bash
+cd backend
+python -m pytest tests -q     # 208 tests, per-test DB + data isolation
+ruff check .                  # lint
+ruff format --check .         # formatting
+```
+
+Runs automatically on every push and pull request via GitHub Actions
+(lint + tests + coverage artifact). See `docs/TESTING.md`.
+
+## Security & compliance
+
+- Broker tokens are Fernet-encrypted at rest; the key (`data/.secret`) is
+  git-ignored — **back it up or the vault is unrecoverable**. Rotate it at
+  any time via `POST /api/vault/rotate-key` (or the popup button).
+- The extension holds only your punch.trade session token — never broker
+  credentials.
+- Every order passes the risk gate; live execution additionally requires
+  reconciliation with the broker.
+- Built for private use by people you trust. Signals with entry/TP/SL may
+  be regulated advice in your jurisdiction (SEBI, SEC, FCA, MAS, …).
+  Do not monetize or publicize without local counsel. Trading involves
+  substantial risk of loss; past backtest performance does not predict
+  future results.
+
+## License
+
+[MIT](LICENSE) — see the LICENSE file for details.
