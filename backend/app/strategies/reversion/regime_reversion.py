@@ -23,21 +23,24 @@ Hysteresis:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 import numpy as np
 
-from ..base import Signal, SignalDirection
-
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, StrategyFamily, Timeframe, register_strategy
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    StrategyFamily,
+    Timeframe,
+    register_strategy,
+)
 from ..indicators import (
     adx,
     atr,
     bollinger,
     closes,
-    crossed_above,
-    crossed_below,
-    ema,
     percentile_rank,
     rsi,
     vwap,
@@ -65,20 +68,30 @@ class RegimeConditionedMeanReversion(Strategy):
         AssetClass.INDEX,
         AssetClass.FOREX,
     ]
-    supported_timeframes = [Timeframe.M5, Timeframe.M15, Timeframe.M30, Timeframe.H1, Timeframe.H4, Timeframe.D1]
+    supported_timeframes = [
+        Timeframe.M5,
+        Timeframe.M15,
+        Timeframe.M30,
+        Timeframe.H1,
+        Timeframe.H4,
+        Timeframe.D1,
+    ]
 
     warmup_bars = 100
 
     parameter_schema = [
         # Regime gates
         ParameterSpec("adx_period", int, 14, "ADX period for trend strength", 10, 30),
-        ParameterSpec("adx_max", float, 25.0, "Maximum ADX for reversion (trend must be weak)", 15, 40),
+        ParameterSpec(
+            "adx_max", float, 25.0, "Maximum ADX for reversion (trend must be weak)", 15, 40
+        ),
         ParameterSpec("atr_period", int, 14, "ATR period for volatility", 10, 30),
         ParameterSpec("vol_pct_max", float, 80.0, "Maximum volatility percentile", 60, 95),
         ParameterSpec("vol_pct_min", float, 20.0, "Minimum volatility percentile", 5, 40),
-        ParameterSpec("shock_threshold", float, 3.0, "Return z-score for shock detection", 2.0, 5.0),
+        ParameterSpec(
+            "shock_threshold", float, 3.0, "Return z-score for shock detection", 2.0, 5.0
+        ),
         ParameterSpec("min_volume_pct", float, 30.0, "Minimum relative volume percentile", 10, 50),
-
         # Mean reversion signals
         ParameterSpec("bb_period", int, 20, "Bollinger Bands period", 10, 50),
         ParameterSpec("bb_std", float, 2.0, "Bollinger Bands std multiplier", 1.5, 3.0),
@@ -86,15 +99,15 @@ class RegimeConditionedMeanReversion(Strategy):
         ParameterSpec("rsi_oversold", float, 30.0, "RSI oversold threshold", 20, 40),
         ParameterSpec("rsi_overbought", float, 70.0, "RSI overbought threshold", 60, 80),
         ParameterSpec("zscore_period", int, 20, "Z-score lookback period", 10, 50),
-        ParameterSpec("zscore_entry", float, -2.0, "Z-score entry threshold (negative for long)", -3.0, -1.0),
+        ParameterSpec(
+            "zscore_entry", float, -2.0, "Z-score entry threshold (negative for long)", -3.0, -1.0
+        ),
         ParameterSpec("zscore_exit", float, -0.5, "Z-score exit threshold", -1.0, 0.0),
         ParameterSpec("zscore_reentry_cooldown", int, 5, "Bars before re-entry after exit", 1, 20),
-
         # VWAP reversion
         ParameterSpec("vwap_period", int, 20, "VWAP period", 10, 50),
         ParameterSpec("vwap_entry_dev", float, 2.0, "VWAP deviation for entry", 1.0, 3.0),
         ParameterSpec("vwap_exit_dev", float, 0.5, "VWAP deviation for exit", 0.0, 1.5),
-
         # Risk
         ParameterSpec("atr_stop_mult", float, 2.0, "ATR stop loss multiplier", 1.0, 5.0),
         ParameterSpec("use_shorting", bool, False, "Allow short signals", None, None),
@@ -139,7 +152,7 @@ class RegimeConditionedMeanReversion(Strategy):
         use_short = self.params["use_shorting"]
 
         # Compute indicators up to current_idx (no lookahead)
-        bars_up_to = bars[:current_idx + 1]
+        bars_up_to = bars[: current_idx + 1]
         c_up_to = closes(bars_up_to)
 
         # Regime indicators
@@ -192,11 +205,10 @@ class RegimeConditionedMeanReversion(Strategy):
         rsi_val = rsi_vals[idx] if idx < len(rsi_vals) else np.nan
 
         # Bollinger Bands position
-        bb_pos = np.nan
         if idx < len(bb["lower"]) and idx < len(bb["upper"]):
             rng = bb["upper"][idx] - bb["lower"][idx]
             if rng > 0:
-                bb_pos = (c_up_to[idx] - bb["lower"][idx]) / rng
+                (c_up_to[idx] - bb["lower"][idx]) / rng
 
         # VWAP deviation
         vwap_dev = np.nan
@@ -232,9 +244,17 @@ class RegimeConditionedMeanReversion(Strategy):
                 self._state = "LONG"
                 self._entry_idx = idx
                 return self._create_signal(
-                bars, idx, SignalDirection.LONG, price, atr_val, atr_mult,
-                adx_vals, atr_pct, zs_vals, rsi_vals
-            )
+                    bars,
+                    idx,
+                    SignalDirection.LONG,
+                    price,
+                    atr_val,
+                    atr_mult,
+                    adx_vals,
+                    atr_pct,
+                    zs_vals,
+                    rsi_vals,
+                )
 
             # Check short entry
             if use_short:
@@ -259,8 +279,16 @@ class RegimeConditionedMeanReversion(Strategy):
                     self._state = "SHORT"
                     self._entry_idx = idx
                     return self._create_signal(
-                        bars, idx, SignalDirection.SHORT, price, atr_val, atr_mult,
-                        adx_vals, atr_pct, zs_vals, rsi_vals
+                        bars,
+                        idx,
+                        SignalDirection.SHORT,
+                        price,
+                        atr_val,
+                        atr_mult,
+                        adx_vals,
+                        atr_pct,
+                        zs_vals,
+                        rsi_vals,
                     )
 
         elif self._state == "LONG":
@@ -282,7 +310,9 @@ class RegimeConditionedMeanReversion(Strategy):
                     direction=SignalDirection.FLAT,
                     timestamp=datetime.fromtimestamp(bars[idx].get("ts", 0)),
                     price=price,
-                    metadata={"exit_reason": "mean_reversion_target" if not regime_ok else "regime_change"},
+                    metadata={
+                        "exit_reason": "mean_reversion_target" if not regime_ok else "regime_change"
+                    },
                 )
 
         elif self._state == "SHORT":
@@ -303,7 +333,9 @@ class RegimeConditionedMeanReversion(Strategy):
                     direction=SignalDirection.FLAT,
                     timestamp=datetime.fromtimestamp(bars[idx].get("ts", 0)),
                     price=price,
-                    metadata={"exit_reason": "mean_reversion_target" if not regime_ok else "regime_change"},
+                    metadata={
+                        "exit_reason": "mean_reversion_target" if not regime_ok else "regime_change"
+                    },
                 )
 
         return None

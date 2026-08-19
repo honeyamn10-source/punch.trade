@@ -25,12 +25,18 @@ Output: TRADE / REDUCED RISK / NO TRADE
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
 
-import numpy as np
+from app.strategy_health import HealthAssessment
 
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, Timeframe, register_strategy
-from app.strategy_health import HealthAssessment, assess_strategy_health
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    Timeframe,
+    register_strategy,
+)
 
 
 @register_strategy
@@ -64,21 +70,64 @@ class AdaptiveEnsemble(Strategy):
         AssetClass.FUTURE,
         AssetClass.OPTION,
     ]
-    supported_timeframes = [Timeframe.M5, Timeframe.M15, Timeframe.M30, Timeframe.H1, Timeframe.H4, Timeframe.D1]
+    supported_timeframes = [
+        Timeframe.M5,
+        Timeframe.M15,
+        Timeframe.M30,
+        Timeframe.H1,
+        Timeframe.H4,
+        Timeframe.D1,
+    ]
 
     warmup_bars = 252
 
     parameter_schema = [
-        ParameterSpec("eligible_families", list, ["trend", "rotation", "reversion", "breakout", "statarb", "carry", "cross_section", "multifactor"], "Strategy families to consider", None, None),
+        ParameterSpec(
+            "eligible_families",
+            list,
+            [
+                "trend",
+                "rotation",
+                "reversion",
+                "breakout",
+                "statarb",
+                "carry",
+                "cross_section",
+                "multifactor",
+            ],
+            "Strategy families to consider",
+            None,
+            None,
+        ),
         ParameterSpec("regime_filters", dict, {}, "Regime -> allowed families mapping", None, None),
-        ParameterSpec("min_health_score", int, 60, "Minimum robustness score for eligibility", 0, 100),
-        ParameterSpec("min_health_status", str, "VALIDATED", "Minimum health status: VALIDATED, PAPER_ELIGIBLE, DEGRADED", None, None),
-        ParameterSpec("max_correlation", float, 0.7, "Maximum pairwise correlation for diversification", 0.3, 0.9),
-        ParameterSpec("risk_budget", float, 1.0, "Total risk budget (fraction of capital)", 0.1, 2.0),
+        ParameterSpec(
+            "min_health_score", int, 60, "Minimum robustness score for eligibility", 0, 100
+        ),
+        ParameterSpec(
+            "min_health_status",
+            str,
+            "VALIDATED",
+            "Minimum health status: VALIDATED, PAPER_ELIGIBLE, DEGRADED",
+            None,
+            None,
+        ),
+        ParameterSpec(
+            "max_correlation",
+            float,
+            0.7,
+            "Maximum pairwise correlation for diversification",
+            0.3,
+            0.9,
+        ),
+        ParameterSpec(
+            "risk_budget", float, 1.0, "Total risk budget (fraction of capital)", 0.1, 2.0
+        ),
         ParameterSpec("cost_sensitivity_threshold", float, 0.5, "Max cost/drag ratio", 0.1, 1.0),
         ParameterSpec("drift_threshold", float, 0.3, "Paper-to-live drift threshold", 0.1, 1.0),
         ParameterSpec("rebalance_frequency", int, 1, "Rebalance every N bars", 1, 20),
-        ParameterSpec("use_health_assessment", bool, True, "Use formal health assessment", None, None),
+        ParameterSpec(
+            "use_health_assessment", bool, True, "Use formal health assessment", None, None
+        ),
     ]
 
     def __init__(self, **params):
@@ -151,8 +200,8 @@ class AdaptiveEnsemble(Strategy):
 
         from ..indicators import adx, atr, closes, percentile_rank
 
-        bars_up_to = bars[:current_idx + 1]
-        c = closes(bars_up_to)
+        bars_up_to = bars[: current_idx + 1]
+        closes(bars_up_to)
         adx_vals = adx(bars_up_to, 14)
         atr_vals = atr(bars_up_to, 14)
         atr_pct = percentile_rank(atr_vals, 252)
@@ -223,15 +272,24 @@ class AdaptiveEnsemble(Strategy):
             "trend": {"punch_adaptive_trend": "adaptive_trend"},
             "rotation": {"punch_tactical_rotation": "tactical_rotation"},
             "reversion": {"punch_regime_reversion": "regime_reversion"},
-            "breakout": {"punch_volatility_breakout": "vol_breakout", "punch_opening_range_breakout": "orb"},
+            "breakout": {
+                "punch_volatility_breakout": "vol_breakout",
+                "punch_opening_range_breakout": "orb",
+            },
             "statarb": {"punch_pairs": "pairs"},
-            "carry": {"punch_carry": "carry", "punch_fx_carry": "fx_carry", "punch_crypto_funding_carry": "crypto_funding"},
+            "carry": {
+                "punch_carry": "carry",
+                "punch_fx_carry": "fx_carry",
+                "punch_crypto_funding_carry": "crypto_funding",
+            },
             "cross_section": {"punch_cross_section_momentum": "cross_section_momentum"},
             "multifactor": {"punch_equity_multifactor": "equity_multifactor"},
         }
         return family_strategies.get(family, {})
 
-    def _get_health_assessment(self, strategy_id: str, bars: list[dict], current_idx: int) -> Optional[HealthAssessment]:
+    def _get_health_assessment(
+        self, strategy_id: str, bars: list[dict], current_idx: int
+    ) -> HealthAssessment | None:
         """Get or compute health assessment for a strategy."""
         # Placeholder - in production would load from trial ledger
         # For now, return None to skip health filtering
@@ -257,7 +315,7 @@ class AdaptiveEnsemble(Strategy):
         if n == 0:
             return {}
 
-        allocation = {strat_id: 1.0 / n for strat_id in eligible.keys()}
+        allocation = {strat_id: 1.0 / n for strat_id in eligible}
 
         # Scale to risk budget
         total_risk = sum(abs(v) for v in allocation.values())

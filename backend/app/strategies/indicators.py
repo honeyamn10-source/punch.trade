@@ -6,8 +6,6 @@ NaN values used for warmup periods.
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 
 
@@ -35,7 +33,7 @@ def sma(values: np.ndarray, period: int) -> np.ndarray:
     out = np.full_like(values, np.nan)
     n = len(values)
     for i in range(period - 1, n):
-        window = values[i - period + 1:i + 1]
+        window = values[i - period + 1 : i + 1]
         if not np.any(np.isnan(window)):
             out[i] = np.mean(window)
     return out
@@ -74,8 +72,8 @@ def rsi(values: np.ndarray, period: int = 14) -> np.ndarray:
 
     # Initial SMA
     if len(values) > period:
-        avg_gain[period] = np.nanmean(gains[1:period + 1])
-        avg_loss[period] = np.nanmean(losses[1:period + 1])
+        avg_gain[period] = np.nanmean(gains[1 : period + 1])
+        avg_loss[period] = np.nanmean(losses[1 : period + 1])
         for i in range(period + 1, len(values)):
             avg_gain[i] = (avg_gain[i - 1] * (period - 1) + gains[i]) / period
             avg_loss[i] = (avg_loss[i - 1] * (period - 1) + losses[i]) / period
@@ -87,15 +85,15 @@ def rsi(values: np.ndarray, period: int = 14) -> np.ndarray:
 def atr(bars: list[dict], period: int = 14) -> np.ndarray:
     """Average True Range."""
     h = highs(bars)
-    l = lows(bars)
+    low = lows(bars)
     c = closes(bars)
 
     prev_c = np.roll(c, 1)
     prev_c[0] = np.nan
 
-    tr1 = h - l
+    tr1 = h - low
     tr2 = np.abs(h - prev_c)
-    tr3 = np.abs(l - prev_c)
+    tr3 = np.abs(low - prev_c)
 
     tr = np.maximum(np.maximum(tr1, tr2), tr3)
     return sma(tr, period)
@@ -104,11 +102,10 @@ def atr(bars: list[dict], period: int = 14) -> np.ndarray:
 def adx(bars: list[dict], period: int = 14) -> np.ndarray:
     """Average Directional Index."""
     h = highs(bars)
-    l = lows(bars)
-    c = closes(bars)
+    low = lows(bars)
 
     up_move = h - np.roll(h, 1)
-    down_move = np.roll(l, 1) - l
+    down_move = np.roll(low, 1) - low
 
     plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
     minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
@@ -125,10 +122,10 @@ def adx(bars: list[dict], period: int = 14) -> np.ndarray:
 def donchian(bars: list[dict], period: int = 20) -> dict[str, np.ndarray]:
     """Donchian Channels."""
     h = highs(bars)
-    l = lows(bars)
+    low = lows(bars)
     return {
         "high": np.full_like(h, np.nan),
-        "low": np.full_like(l, np.nan),
+        "low": np.full_like(low, np.nan),
         "mid": np.full_like(h, np.nan),
     }
 
@@ -137,15 +134,15 @@ def donchian_high(bars: list[dict], period: int) -> np.ndarray:
     h = highs(bars)
     out = np.full_like(h, np.nan)
     for i in range(period - 1, len(h)):
-        out[i] = np.nanmax(h[i - period + 1:i + 1])
+        out[i] = np.nanmax(h[i - period + 1 : i + 1])
     return out
 
 
 def donchian_low(bars: list[dict], period: int) -> np.ndarray:
-    l = lows(bars)
-    out = np.full_like(l, np.nan)
-    for i in range(period - 1, len(l)):
-        out[i] = np.nanmin(l[i - period + 1:i + 1])
+    low = lows(bars)
+    out = np.full_like(low, np.nan)
+    for i in range(period - 1, len(low)):
+        out[i] = np.nanmin(low[i - period + 1 : i + 1])
     return out
 
 
@@ -154,15 +151,23 @@ def bollinger(values: np.ndarray, period: int = 20, std_mult: float = 2.0) -> di
     mid = sma(values, period)
     std = np.full_like(values, np.nan)
     for i in range(period - 1, len(values)):
-        window = values[i - period + 1:i + 1]
+        window = values[i - period + 1 : i + 1]
         if not np.any(np.isnan(window)):
             std[i] = np.std(window)
     upper = mid + std_mult * std
     lower = mid - std_mult * std
-    return {"upper": upper, "mid": mid, "lower": lower, "std": std, "bandwidth": (upper - lower) / np.where(mid == 0, 1, mid)}
+    return {
+        "upper": upper,
+        "mid": mid,
+        "lower": lower,
+        "std": std,
+        "bandwidth": (upper - lower) / np.where(mid == 0, 1, mid),
+    }
 
 
-def macd(values: np.ndarray, fast: int = 12, slow: int = 26, signal: int = 9) -> dict[str, np.ndarray]:
+def macd(
+    values: np.ndarray, fast: int = 12, slow: int = 26, signal: int = 9
+) -> dict[str, np.ndarray]:
     """MACD."""
     ema_fast = ema(values, fast)
     ema_slow = ema(values, slow)
@@ -179,8 +184,8 @@ def vwap(bars: list[dict], period: int = 20) -> np.ndarray:
     pv = c * v
     out = np.full_like(c, np.nan)
     for i in range(period - 1, len(c)):
-        window_pv = pv[i - period + 1:i + 1]
-        window_v = v[i - period + 1:i + 1]
+        window_pv = pv[i - period + 1 : i + 1]
+        window_v = v[i - period + 1 : i + 1]
         if np.sum(window_v) > 0 and not np.any(np.isnan(window_pv)):
             out[i] = np.sum(window_pv) / np.sum(window_v)
     return out
@@ -189,13 +194,13 @@ def vwap(bars: list[dict], period: int = 20) -> np.ndarray:
 def stochastic(bars: list[dict], period: int = 14) -> np.ndarray:
     """Stochastic %K."""
     h = highs(bars)
-    l = lows(bars)
+    low = lows(bars)
     c = closes(bars)
 
     out = np.full_like(c, np.nan)
     for i in range(period - 1, len(c)):
-        hh = np.nanmax(h[i - period + 1:i + 1])
-        ll = np.nanmin(l[i - period + 1:i + 1])
+        hh = np.nanmax(h[i - period + 1 : i + 1])
+        ll = np.nanmin(low[i - period + 1 : i + 1])
         if hh != ll:
             out[i] = 100 * (c[i] - ll) / (hh - ll)
     return out
@@ -224,7 +229,7 @@ def slope(values: np.ndarray, period: int = 5) -> np.ndarray:
     out = np.full_like(values, np.nan)
     x = np.arange(period)
     for i in range(period - 1, len(values)):
-        y = values[i - period + 1:i + 1]
+        y = values[i - period + 1 : i + 1]
         if not np.any(np.isnan(y)):
             out[i] = np.polyfit(x, y, 1)[0]
     return out
@@ -236,7 +241,7 @@ def percentile_rank(values: np.ndarray, lookback: int = 252) -> np.ndarray:
     start = min(lookback - 1, len(values) - 1)
     for i in range(start, len(values)):
         window_start = max(0, i - lookback + 1)
-        window = values[window_start:i + 1]
+        window = values[window_start : i + 1]
         valid = window[~np.isnan(window)]
         if len(valid) > 0:
             out[i] = 100 * np.sum(valid <= values[i]) / len(valid)
@@ -248,7 +253,7 @@ def zscore(values: np.ndarray, period: int = 20) -> np.ndarray:
     mean = sma(values, period)
     std = np.full_like(values, np.nan)
     for i in range(period - 1, len(values)):
-        window = values[i - period + 1:i + 1]
+        window = values[i - period + 1 : i + 1]
         if not np.any(np.isnan(window)):
             std[i] = np.std(window)
     return (values - mean) / np.where(std == 0, 1, std)
@@ -263,7 +268,7 @@ def normalize(values: np.ndarray, method: str = "zscore", period: int = 20) -> n
     elif method == "minmax":
         out = np.full_like(values, np.nan)
         for i in range(period - 1, len(values)):
-            window = values[i - period + 1:i + 1]
+            window = values[i - period + 1 : i + 1]
             valid = window[~np.isnan(window)]
             if len(valid) > 1:
                 mn, mx = np.min(valid), np.max(valid)

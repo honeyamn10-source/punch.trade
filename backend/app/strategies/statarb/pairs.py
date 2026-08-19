@@ -9,12 +9,19 @@ Relationship breakdown detector: stops when cointegration deteriorates, spread v
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
 
 import numpy as np
 
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, StrategyFamily, Timeframe, register_strategy
-from ..indicators import closes, zscore
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    StrategyFamily,
+    Timeframe,
+    register_strategy,
+)
 
 
 @register_strategy
@@ -46,16 +53,29 @@ class StatisticalPairs(Strategy):
         ParameterSpec("symbol_b", str, "", "Second symbol in pair", None, None),
         ParameterSpec("formation_period", int, 252, "Formation window (bars)", 126, 504),
         ParameterSpec("trading_period", int, 63, "Trading window (bars)", 21, 252),
-        ParameterSpec("correlation_min", float, 0.7, "Minimum correlation for pair selection", 0.5, 0.95),
-        ParameterSpec("cointegration_pval_max", float, 0.05, "Max p-value for cointegration (Engle-Granger)", 0.01, 0.1),
+        ParameterSpec(
+            "correlation_min", float, 0.7, "Minimum correlation for pair selection", 0.5, 0.95
+        ),
+        ParameterSpec(
+            "cointegration_pval_max",
+            float,
+            0.05,
+            "Max p-value for cointegration (Engle-Granger)",
+            0.01,
+            0.1,
+        ),
         ParameterSpec("spread_std_min", float, 0.005, "Minimum spread volatility", 0.001, 0.05),
         ParameterSpec("zscore_entry", float, 2.0, "Z-score entry threshold", 1.5, 3.0),
         ParameterSpec("zscore_exit", float, 0.5, "Z-score exit threshold", 0.0, 1.0),
         ParameterSpec("zscore_stop", float, 3.5, "Z-score stop loss threshold", 3.0, 5.0),
         ParameterSpec("max_holding_bars", int, 20, "Maximum holding period (bars)", 5, 63),
         ParameterSpec("use_shorting", bool, True, "Allow short spread", None, None),
-        ParameterSpec("breakdown_corr_min", float, 0.3, "Correlation below which to stop trading", 0.1, 0.5),
-        ParameterSpec("breakdown_spread_vol_mult", float, 3.0, "Spread vol multiplier for breakdown", 2.0, 5.0),
+        ParameterSpec(
+            "breakdown_corr_min", float, 0.3, "Correlation below which to stop trading", 0.1, 0.5
+        ),
+        ParameterSpec(
+            "breakdown_spread_vol_mult", float, 3.0, "Spread vol multiplier for breakdown", 2.0, 5.0
+        ),
     ]
 
     def __init__(self, **params):
@@ -65,7 +85,7 @@ class StatisticalPairs(Strategy):
         self._spread_std: float = 1.0
         self._formation_done: bool = False
         self._in_trade: bool = False
-        self._trade_direction: Optional[str] = None
+        self._trade_direction: str | None = None
         self._entry_idx: int = -1
         self._spread_history: list = []
 
@@ -86,7 +106,10 @@ class StatisticalPairs(Strategy):
         price_a = self._extract_symbol_closes(bars, current_idx, self.params["symbol_a"])
         price_b = self._extract_symbol_closes(bars, current_idx, self.params["symbol_b"])
 
-        if len(price_a) < self.params["formation_period"] or len(price_b) < self.params["formation_period"]:
+        if (
+            len(price_a) < self.params["formation_period"]
+            or len(price_b) < self.params["formation_period"]
+        ):
             return None
 
         # Formation phase: compute hedge ratio and spread statistics
@@ -100,8 +123,8 @@ class StatisticalPairs(Strategy):
 
         # Trading phase: compute current spread and z-score
         trading_start = current_idx - self.params["trading_period"]
-        recent_a = price_a[trading_start:current_idx + 1]
-        recent_b = price_b[trading_start:current_idx + 1]
+        recent_a = price_a[trading_start : current_idx + 1]
+        recent_b = price_b[trading_start : current_idx + 1]
 
         if len(recent_a) < 20 or len(recent_b) < 20:
             return None
@@ -114,7 +137,7 @@ class StatisticalPairs(Strategy):
         if len(self._spread_history) < 20:
             return None
 
-        spread_arr = np.array(self._spread_history[-self.params["trading_period"]:])
+        spread_arr = np.array(self._spread_history[-self.params["trading_period"] :])
         z = (spread - np.mean(spread_arr)) / (np.std(spread_arr) + 1e-8)
 
         # Relationship breakdown detection
@@ -148,9 +171,12 @@ class StatisticalPairs(Strategy):
 
         # Exit logic
         elif self._in_trade:
-            if self._trade_direction == "LONG_SPREAD" and z >= -self.params["zscore_exit"]:
-                return self._close_position(bars, current_idx, "target")
-            elif self._trade_direction == "SHORT_SPREAD" and z <= self.params["zscore_exit"]:
+            if (
+                self._trade_direction == "LONG_SPREAD"
+                and z >= -self.params["zscore_exit"]
+                or self._trade_direction == "SHORT_SPREAD"
+                and z <= self.params["zscore_exit"]
+            ):
                 return self._close_position(bars, current_idx, "target")
             elif abs(z) >= self.params["zscore_stop"]:
                 return self._close_position(bars, current_idx, "stop_loss")
@@ -168,8 +194,8 @@ class StatisticalPairs(Strategy):
     def _run_formation(self, price_a: np.ndarray, price_b: np.ndarray):
         """Run formation phase: compute hedge ratio via OLS."""
         # Use last formation_period bars
-        a = price_a[-self.params["formation_period"]:]
-        b = price_b[-self.params["formation_period"]:]
+        a = price_a[-self.params["formation_period"] :]
+        b = price_b[-self.params["formation_period"] :]
 
         # OLS: a = alpha + beta * b
         X = np.column_stack([np.ones(len(b)), b])
@@ -211,22 +237,16 @@ class StatisticalPairs(Strategy):
         # Spread volatility explosion
         recent_spread = a_recent - self._hedge_ratio * b_recent
         recent_std = np.std(recent_spread)
-        if recent_std > self._spread_std * self.params["breakdown_spread_vol_mult"]:
-            return True
-
-        return False
+        return recent_std > self._spread_std * self.params["breakdown_spread_vol_mult"]
 
     def _create_signal(self, direction: str, bars: list[dict], idx: int) -> Signal:
         sym_a = self.params["symbol_a"]
         sym_b = self.params["symbol_b"]
         ts = bars[idx].get("ts", 0)
-        price_a = bars[idx].get("close", 0) if bars[idx].get("symbol") == self.params["symbol_a"] else 0
-        price_b = bars[idx].get("close", 0) if bars[idx].get("symbol") == self.params["symbol_b"] else 0
+        (bars[idx].get("close", 0) if bars[idx].get("symbol") == self.params["symbol_a"] else 0)
+        (bars[idx].get("close", 0) if bars[idx].get("symbol") == self.params["symbol_b"] else 0)
 
-        if direction == "LONG_SPREAD":
-            dir_enum = SignalDirection.LONG
-        else:
-            dir_enum = SignalDirection.SHORT
+        dir_enum = SignalDirection.LONG if direction == "LONG_SPREAD" else SignalDirection.SHORT
 
         return Signal(
             strategy_id=self.strategy_id,

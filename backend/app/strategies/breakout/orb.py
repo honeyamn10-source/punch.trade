@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time as dt_time, timedelta
-from typing import Any
+from datetime import datetime, timedelta
+from datetime import time as dt_time
 
 import numpy as np
 
-from .volatility_breakout import VolatilityBreakout
 from ..base import ParameterSpec, Signal, SignalDirection, Timeframe, register_strategy
-from ..indicators import atr, closes, donchian_high, donchian_low, percentile_rank
+from ..indicators import atr, closes, percentile_rank
+from .volatility_breakout import VolatilityBreakout
 
 
 @register_strategy
@@ -36,7 +36,9 @@ class OpeningRangeBreakout(VolatilityBreakout):
         ParameterSpec("opening_minutes", int, 30, "Opening range duration in minutes", 5, 120),
         ParameterSpec("session_start", str, "09:30", "Session start time (HH:MM)", None, None),
         ParameterSpec("session_end", str, "16:00", "Session end time (HH:MM)", None, None),
-        ParameterSpec("volume_surge_pct", float, 75.0, "Volume surge percentile for confirmation", 50, 95),
+        ParameterSpec(
+            "volume_surge_pct", float, 75.0, "Volume surge percentile for confirmation", 50, 95
+        ),
         ParameterSpec("atr_period", int, 14, "ATR period for stop", 10, 30),
         ParameterSpec("atr_stop_mult", float, 1.5, "ATR trailing stop multiplier", 1.0, 5.0),
         ParameterSpec("use_shorting", bool, True, "Allow short ORB", None, None),
@@ -63,7 +65,7 @@ class OpeningRangeBreakout(VolatilityBreakout):
         session_end = self._parse_time(self.params["session_end"])
         vol_surge_pct = self.params["volume_surge_pct"]
         atr_p = self.params["atr_period"]
-        atr_mult = self.params["atr_stop_mult"]
+        self.params["atr_stop_mult"]
         use_short = self.params["use_shorting"]
 
         # Get current bar timestamp
@@ -87,7 +89,7 @@ class OpeningRangeBreakout(VolatilityBreakout):
         after_opening = current_time > opening_end_dt.time()
         in_session = session_start <= current_time <= session_end
 
-        bars_up_to = bars[:current_idx + 1]
+        bars_up_to = bars[: current_idx + 1]
         c_up_to = closes(bars_up_to)
 
         if in_opening_range:
@@ -113,11 +115,11 @@ class OpeningRangeBreakout(VolatilityBreakout):
                 return None
 
             # Compute volume surge
-            volumes = np.array([b.get("volume", 1.0) for b in bars[:current_idx + 1]])
+            volumes = np.array([b.get("volume", 1.0) for b in bars[: current_idx + 1]])
             vol_pct = percentile_rank(volumes, 252)
 
             # ATR for stop
-            atr_vals = atr(bars[:current_idx + 1], atr_p)
+            atr_vals = atr(bars[: current_idx + 1], atr_p)
             atr_val = atr_vals[current_idx] if current_idx < len(atr_vals) else np.nan
 
             price = c_up_to[current_idx]
@@ -125,7 +127,9 @@ class OpeningRangeBreakout(VolatilityBreakout):
 
             # Breakout signals
             if price > self._opening_high and vol_ok:
-                stop_loss = price - self.params["atr_stop_mult"] * (atr_val if not np.isnan(atr_val) else price * 0.02)
+                stop_loss = price - self.params["atr_stop_mult"] * (
+                    atr_val if not np.isnan(atr_val) else price * 0.02
+                )
                 return Signal(
                     strategy_id=self.strategy_id,
                     symbol=bars[current_idx].get("symbol", "UNKNOWN"),
@@ -138,12 +142,16 @@ class OpeningRangeBreakout(VolatilityBreakout):
                         "opening_high": self._opening_high,
                         "opening_low": self._opening_low,
                         "opening_volume": self._opening_volume,
-                        "vol_pct": float(vol_pct[current_idx]) if current_idx < len(vol_pct) else None,
+                        "vol_pct": float(vol_pct[current_idx])
+                        if current_idx < len(vol_pct)
+                        else None,
                     },
                 )
 
             if use_short and price < self._opening_low and vol_ok:
-                stop_loss = price + self.params["atr_stop_mult"] * (atr_val if not np.isnan(atr_val) else price * 0.02)
+                stop_loss = price + self.params["atr_stop_mult"] * (
+                    atr_val if not np.isnan(atr_val) else price * 0.02
+                )
                 return Signal(
                     strategy_id=self.strategy_id,
                     symbol=bars[current_idx].get("symbol", "UNKNOWN"),
@@ -156,7 +164,9 @@ class OpeningRangeBreakout(VolatilityBreakout):
                         "opening_high": self._opening_high,
                         "opening_low": self._opening_low,
                         "opening_volume": self._opening_volume,
-                        "vol_pct": float(vol_pct[current_idx]) if current_idx < len(vol_pct) else None,
+                        "vol_pct": float(vol_pct[current_idx])
+                        if current_idx < len(vol_pct)
+                        else None,
                     },
                 )
 
@@ -173,7 +183,7 @@ class OpeningRangeBreakout(VolatilityBreakout):
         out = np.full_like(values, np.nan)
         n = len(values)
         for i in range(period - 1, n):
-            window = values[i - period + 1:i + 1]
+            window = values[i - period + 1 : i + 1]
             if not np.any(np.isnan(window)):
                 out[i] = np.mean(window)
         return out
@@ -183,12 +193,15 @@ class OpeningRangeBreakout(VolatilityBreakout):
         mid = self._sma(values, period)
         std = np.full_like(values, np.nan)
         for i in range(period - 1, len(values)):
-            window = values[i - period + 1:i + 1]
+            window = values[i - period + 1 : i + 1]
             if not np.any(np.isnan(window)):
                 std[i] = np.std(window)
         upper = mid + std_mult * std
         lower = mid - std_mult * std
-        return {"upper": upper, "mid": mid, "lower": lower, "std": std, "bandwidth": (upper - lower) / np.where(mid == 0, 1, mid)}
-
-
-from datetime import timedelta
+        return {
+            "upper": upper,
+            "mid": mid,
+            "lower": lower,
+            "std": std,
+            "bandwidth": (upper - lower) / np.where(mid == 0, 1, mid),
+        }

@@ -118,8 +118,17 @@ def detect_regime_vol_clustering(returns: np.ndarray, window: int = 20) -> dict:
         persistence = float(np.corrcoef(vol[:-1], vol[1:])[0, 1])
     else:
         persistence = 0.0
-    regime = "HIGH_VOL" if current_vol > 1.5 * avg_vol else ("LOW_VOL" if current_vol < 0.5 * avg_vol else "NORMAL")
-    return {"regime": regime, "vol": float(current_vol), "avg_vol": float(avg_vol), "persistence": persistence}
+    regime = (
+        "HIGH_VOL"
+        if current_vol > 1.5 * avg_vol
+        else ("LOW_VOL" if current_vol < 0.5 * avg_vol else "NORMAL")
+    )
+    return {
+        "regime": regime,
+        "vol": float(current_vol),
+        "avg_vol": float(avg_vol),
+        "persistence": persistence,
+    }
 
 
 # ----------------------------------------------------------- allocation ----

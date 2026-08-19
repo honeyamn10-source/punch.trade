@@ -8,13 +8,10 @@ Computes:
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
-from .pnl import summary_stats
-from .research import deflated_sharpe, pbo, final_test_lock
+from .research import deflated_sharpe, final_test_lock, pbo
 
 
 # --------------------------------------------------------------- types ----
@@ -119,15 +116,15 @@ def assess_strategy_health(
     """
     cfg = config or DEFAULT_CONFIG
     warnings: list[str] = []
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Extract metrics from research report
-    quality_gate = research_report.get("qualityGate", {})
+    research_report.get("qualityGate", {})
     walk_forward = research_report.get("walkForward", {})
     param_stability = research_report.get("parameterStability", {})
     bootstrap = research_report.get("bootstrap", {})
     splits = research_report.get("splits", {})
-    sample = research_report.get("sample", {})
+    research_report.get("sample", {})
 
     test_trades = splits.get("test", {}).get("trades", 0)
     oos_trades = test_trades
@@ -160,52 +157,57 @@ def assess_strategy_health(
 
     # 1. OOS Expectancy Quality
     oos_score, oos_detail, oos_passed = _score_oos_expectancy(splits, cfg)
-    components.append(HealthComponent(
-        "OOS Expectancy Quality", cfg.weight_oos_expectancy,
-        oos_score, oos_detail, oos_passed
-    ))
+    components.append(
+        HealthComponent(
+            "OOS Expectancy Quality", cfg.weight_oos_expectancy, oos_score, oos_detail, oos_passed
+        )
+    )
 
     # 2. Walk-Forward Consistency
     wf_score, wf_detail, wf_passed = _score_walk_forward(walk_forward, cfg)
-    components.append(HealthComponent(
-        "Walk-Forward Consistency", cfg.weight_walk_forward,
-        wf_score, wf_detail, wf_passed
-    ))
+    components.append(
+        HealthComponent(
+            "Walk-Forward Consistency", cfg.weight_walk_forward, wf_score, wf_detail, wf_passed
+        )
+    )
 
     # 3. Risk-Adjusted Return (Sharpe/Sortino)
     risk_score, risk_detail, risk_passed = _score_risk_adjusted(splits, cfg)
-    components.append(HealthComponent(
-        "Risk-Adjusted Return", cfg.weight_risk_adjusted,
-        risk_score, risk_detail, risk_passed
-    ))
+    components.append(
+        HealthComponent(
+            "Risk-Adjusted Return", cfg.weight_risk_adjusted, risk_score, risk_detail, risk_passed
+        )
+    )
 
     # 4. Drawdown Quality
     dd_score, dd_detail, dd_passed = _score_drawdown(splits, cfg)
-    components.append(HealthComponent(
-        "Drawdown Quality", cfg.weight_drawdown,
-        dd_score, dd_detail, dd_passed
-    ))
+    components.append(
+        HealthComponent("Drawdown Quality", cfg.weight_drawdown, dd_score, dd_detail, dd_passed)
+    )
 
     # 5. Parameter Stability
     ps_score, ps_detail, ps_passed = _score_param_stability(param_stability, cfg)
-    components.append(HealthComponent(
-        "Parameter Stability", cfg.weight_param_stability,
-        ps_score, ps_detail, ps_passed
-    ))
+    components.append(
+        HealthComponent(
+            "Parameter Stability", cfg.weight_param_stability, ps_score, ps_detail, ps_passed
+        )
+    )
 
     # 6. Cost Robustness
     cr_score, cr_detail, cr_passed = _score_cost_robustness(research_report, cfg)
-    components.append(HealthComponent(
-        "Cost Robustness", cfg.weight_cost_robustness,
-        cr_score, cr_detail, cr_passed
-    ))
+    components.append(
+        HealthComponent(
+            "Cost Robustness", cfg.weight_cost_robustness, cr_score, cr_detail, cr_passed
+        )
+    )
 
     # 7. Cross-Market Portability
     cm_score, cm_detail, cm_passed = _score_cross_market(cross_market_reports, cfg)
-    components.append(HealthComponent(
-        "Cross-Market Portability", cfg.weight_cross_market,
-        cm_score, cm_detail, cm_passed
-    ))
+    components.append(
+        HealthComponent(
+            "Cross-Market Portability", cfg.weight_cross_market, cm_score, cm_detail, cm_passed
+        )
+    )
 
     # --------------------------------------- weighted score ---------------
     weighted_score = sum(c.score * c.weight for c in components) / sum(c.weight for c in components)
@@ -222,9 +224,17 @@ def assess_strategy_health(
     # --------------------------------------- status & verdict -------------
     status = _determine_status(final_score, cfg)
     verdict = _determine_verdict(
-        status, oos_passed, wf_passed, risk_passed, dd_passed,
-        oos_trades, wf_windows, total_trades,
-        dsr_result, pbo_result, final_test_locked
+        status,
+        oos_passed,
+        wf_passed,
+        risk_passed,
+        dd_passed,
+        oos_trades,
+        wf_windows,
+        total_trades,
+        dsr_result,
+        pbo_result,
+        final_test_locked,
     )
 
     # --------------------------------------- metrics summary --------------
@@ -279,7 +289,7 @@ def _score_oos_expectancy(splits: dict, cfg: HealthConfig) -> tuple[float, str, 
         detail = f"Positive OOS ({oos_net:.2f}) and validation ({val_net:.2f})"
     elif oos_net > 0:
         score = 60
-        detail = f"Positive OOS but validation negative"
+        detail = "Positive OOS but validation negative"
     else:
         score = 0
         detail = f"Negative OOS expectancy ({oos_net:.2f})"
@@ -373,7 +383,7 @@ def _score_cost_robustness(report: dict, cfg: HealthConfig) -> tuple[float, str,
     if not cost_stress:
         return 50, "Cost stress not evaluated", False
 
-    base_expectancy = cost_stress.get("base_expectancy", 0)
+    cost_stress.get("base_expectancy", 0)
     stress_expectancy = cost_stress.get("stress_expectancy", 0)
     cost_drag = cost_stress.get("cost_drag_pct", 0)
 
@@ -400,7 +410,9 @@ def _score_cost_robustness(report: dict, cfg: HealthConfig) -> tuple[float, str,
     return score, detail, passed
 
 
-def _score_cross_market(cross_reports: list[dict] | None, cfg: HealthConfig) -> tuple[float, str, bool]:
+def _score_cross_market(
+    cross_reports: list[dict] | None, cfg: HealthConfig
+) -> tuple[float, str, bool]:
     if not cross_reports or len(cross_reports) < 2:
         return 50, "Single market only", False
 

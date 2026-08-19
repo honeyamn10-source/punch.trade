@@ -12,12 +12,18 @@ Supports skip-most-recent-period variants.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
 
 import numpy as np
 
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, StrategyFamily, Timeframe, register_strategy
-from ..indicators import closes, percentile_rank
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    Timeframe,
+    register_strategy,
+)
 
 
 @register_strategy
@@ -51,7 +57,9 @@ class CrossSectionalMomentum(Strategy):
         ParameterSpec("skip_recent_days", int, 21, "Skip most recent period (days)", 0, 63),
         ParameterSpec("vol_adjust", bool, True, "Volatility-adjust momentum", None, None),
         ParameterSpec("trend_quality_weight", float, 0.2, "Weight for trend quality", 0.0, 1.0),
-        ParameterSpec("vol_momentum_weight", float, 0.3, "Weight for vol-adjusted momentum", 0.0, 1.0),
+        ParameterSpec(
+            "vol_momentum_weight", float, 0.3, "Weight for vol-adjusted momentum", 0.0, 1.0
+        ),
         ParameterSpec("mom_3m_weight", float, 0.2, "Weight for 3m momentum", 0.0, 1.0),
         ParameterSpec("mom_6m_weight", float, 0.3, "Weight for 6m momentum", 0.0, 1.0),
         ParameterSpec("mom_12m_weight", float, 0.3, "Weight for 12m momentum", 0.0, 1.0),
@@ -60,7 +68,9 @@ class CrossSectionalMomentum(Strategy):
         ParameterSpec("use_shorting", bool, False, "Allow short positions", None, None),
         ParameterSpec("min_momentum", float, 0.0, "Minimum momentum score for long", -1.0, 1.0),
         ParameterSpec("rebalance_frequency", int, 21, "Rebalance every N bars", 5, 63),
-        ParameterSpec("skip_recent", bool, True, "Skip most recent period in momentum calc", None, None),
+        ParameterSpec(
+            "skip_recent", bool, True, "Skip most recent period in momentum calc", None, None
+        ),
     ]
 
     def __init__(self, **params):
@@ -86,7 +96,14 @@ class CrossSectionalMomentum(Strategy):
             price_data[sym] = self._extract_closes(bars, current_idx, sym)
 
         # Filter symbols with enough data
-        min_bars = max(self.params["mom_12m_period"], self.params["mom_6m_period"], self.params["mom_3m_period"]) + 20
+        (
+            max(
+                self.params["mom_12m_period"],
+                self.params["mom_6m_period"],
+                self.params["mom_3m_period"],
+            )
+            + 20
+        )
         valid_symbols = {s: p for s, p in price_data.items() if len(p) >= len(p) * 0.8}
 
         if len(valid_symbols) < 2:
@@ -110,7 +127,13 @@ class CrossSectionalMomentum(Strategy):
         bottom_n = self.params["bottom_n"]
 
         longs = [s for s, sc in ranked[:top_n] if sc["composite"] >= self.params["min_momentum"]]
-        shorts = [s for s, sc in ranked[-bottom_n:] if sc["composite"] <= -self.params["min_momentum"] and self.params["use_shorting"] and bottom_n > 0]
+        shorts = [
+            s
+            for s, sc in ranked[-bottom_n:]
+            if sc["composite"] <= -self.params["min_momentum"]
+            and self.params["use_shorting"]
+            and bottom_n > 0
+        ]
 
         # Build allocation
         allocation = {}
@@ -144,7 +167,15 @@ class CrossSectionalMomentum(Strategy):
             metadata={
                 "allocation": allocation,
                 "ranking": [
-                    {"symbol": s, "composite": sc["composite"], "mom_3m": sc["mom_3m"], "mom_6m": sc["mom_6m"], "mom_12m": sc["mom_12m"], "vol_adj": sc["vol_adj"], "trend_q": sc["trend_q"]}
+                    {
+                        "symbol": s,
+                        "composite": sc["composite"],
+                        "mom_3m": sc["mom_3m"],
+                        "mom_6m": sc["mom_6m"],
+                        "mom_12m": sc["mom_12m"],
+                        "vol_adj": sc["vol_adj"],
+                        "trend_q": sc["trend_q"],
+                    }
                     for s, sc in ranked
                 ],
                 "longs": longs,
@@ -159,7 +190,7 @@ class CrossSectionalMomentum(Strategy):
                 closes_list.append(bars[i].get("close", np.nan))
         return np.array(closes_list)
 
-    def _compute_momentum_score(self, prices: np.ndarray) -> Optional[dict]:
+    def _compute_momentum_score(self, prices: np.ndarray) -> dict | None:
         if len(prices) < 252:
             return None
 
@@ -204,11 +235,11 @@ class CrossSectionalMomentum(Strategy):
             w = {k: v / total_w for k, v in w.items()}
 
         composite = (
-            w["m3"] * np.tanh(mom_3m * 10) +
-            w["m6"] * np.tanh(mom_6m * 10) +
-            w["m12"] * np.tanh(mom_12m * 10) +
-            w["va"] * np.tanh(vol_adj * 5) +
-            w["tq"] * trend_q
+            w["m3"] * np.tanh(mom_3m * 10)
+            + w["m6"] * np.tanh(mom_6m * 10)
+            + w["m12"] * np.tanh(mom_12m * 10)
+            + w["va"] * np.tanh(vol_adj * 5)
+            + w["tq"] * trend_q
         )
 
         return {

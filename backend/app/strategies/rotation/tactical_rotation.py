@@ -11,25 +11,32 @@ Supports RISK_ON / NEUTRAL / RISK_OFF regimes with defensive allocation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
-from typing import Any
+from enum import StrEnum
 
 import numpy as np
 
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, StrategyFamily, Timeframe, register_strategy
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    StrategyFamily,
+    Timeframe,
+    register_strategy,
+)
 from ..indicators import (
     adx,
     atr,
     closes,
     ema,
     percentile_rank,
-    slope,
 )
 
 
-class RotationRegime(str, Enum):
+class RotationRegime(StrEnum):
     RISK_ON = "RISK_ON"
     NEUTRAL = "NEUTRAL"
     RISK_OFF = "RISK_OFF"
@@ -38,6 +45,7 @@ class RotationRegime(str, Enum):
 @dataclass
 class AssetScore:
     """Score for a single asset in the universe."""
+
     symbol: str
     momentum_3m: float
     momentum_6m: float
@@ -85,8 +93,12 @@ class TacticalRotation(Strategy):
         ParameterSpec("vol_period", int, 20, "Volatility lookback", 10, 60),
         ParameterSpec("max_assets", int, 3, "Maximum number of assets to hold", 1, 10),
         ParameterSpec("min_score", float, 0.0, "Minimum composite score for inclusion", -2.0, 2.0),
-        ParameterSpec("defensive_symbols", list, [], "Defensive assets (cash, bonds, gold)", None, None),
-        ParameterSpec("risk_off_allocation", float, 1.0, "Allocation to defensive in RISK_OFF", 0.0, 1.0),
+        ParameterSpec(
+            "defensive_symbols", list, [], "Defensive assets (cash, bonds, gold)", None, None
+        ),
+        ParameterSpec(
+            "risk_off_allocation", float, 1.0, "Allocation to defensive in RISK_OFF", 0.0, 1.0
+        ),
         ParameterSpec("rebalance_frequency", int, 21, "Rebalance every N bars", 5, 63),
         ParameterSpec("use_shorting", bool, False, "Allow short positions", None, None),
     ]
@@ -150,7 +162,9 @@ class TacticalRotation(Strategy):
         return Signal(
             strategy_id=self.strategy_id,
             symbol="PORTFOLIO",
-            direction=SignalDirection.LONG if regime != RotationRegime.RISK_OFF else SignalDirection.FLAT,
+            direction=SignalDirection.LONG
+            if regime != RotationRegime.RISK_OFF
+            else SignalDirection.FLAT,
             timestamp=datetime.fromtimestamp(bars[current_idx].get("ts", 0)),
             price=1.0,
             confidence=1.0,
@@ -181,11 +195,13 @@ class TacticalRotation(Strategy):
         """
         # If bars already have symbol field, filter
         if bars and "symbol" in bars[0]:
-            return [b for b in bars[:current_idx + 1] if b.get("symbol") == symbol]
+            return [b for b in bars[: current_idx + 1] if b.get("symbol") == symbol]
         # Otherwise assume single-symbol data
-        return bars[:current_idx + 1]
+        return bars[: current_idx + 1]
 
-    def _compute_asset_score(self, bars: list[dict], symbol: str, defensive: list[str]) -> AssetScore | None:
+    def _compute_asset_score(
+        self, bars: list[dict], symbol: str, defensive: list[str]
+    ) -> AssetScore | None:
         is_defensive = symbol in defensive
         c = closes(bars)
 
@@ -242,7 +258,9 @@ class TacticalRotation(Strategy):
             regime=RotationRegime.NEUTRAL,  # Will be set by _determine_regime
         )
 
-    def _trend_quality(self, c: np.ndarray, ema_vals: np.ndarray, adx_vals: np.ndarray, idx: int) -> float:
+    def _trend_quality(
+        self, c: np.ndarray, ema_vals: np.ndarray, adx_vals: np.ndarray, idx: int
+    ) -> float:
         if idx >= len(c) or idx >= len(ema_vals):
             return 0.0
         price_vs_ema = (c[idx] - ema_vals[idx]) / ema_vals[idx] if ema_vals[idx] != 0 else 0
@@ -291,14 +309,14 @@ class TacticalRotation(Strategy):
         elif regime == RotationRegime.RISK_ON:
             # Select top risky assets
             risky_scores.sort(key=lambda x: x.composite_score, reverse=True)
-            selected = risky_scores[:self.params["max_assets"]]
+            selected = risky_scores[: self.params["max_assets"]]
             # Add cash buffer
             if defensive_scores:
                 selected.append(defensive_scores[0])
         else:
             # NEUTRAL: mix
             risky_scores.sort(key=lambda x: x.composite_score, reverse=True)
-            selected = risky_scores[:max(1, self.params["max_assets"] // 2)]
+            selected = risky_scores[: max(1, self.params["max_assets"] // 2)]
             if defensive_scores:
                 selected.append(defensive_scores[0])
 
@@ -306,7 +324,9 @@ class TacticalRotation(Strategy):
         selected = [s for s in selected if s.composite_score >= self.params["min_score"]]
         return selected
 
-    def _build_allocation(self, selected: list[AssetScore], regime: RotationRegime, defensive: list[str]) -> dict[str, float]:
+    def _build_allocation(
+        self, selected: list[AssetScore], regime: RotationRegime, defensive: list[str]
+    ) -> dict[str, float]:
         """Build target allocation dict."""
         if not selected:
             return {}

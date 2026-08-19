@@ -10,12 +10,18 @@ Never use current fundamentals for historical backtests.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
 
 import numpy as np
 
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, Timeframe, register_strategy
-from ..indicators import closes
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    Timeframe,
+    register_strategy,
+)
 
 
 @register_strategy
@@ -39,13 +45,31 @@ class MultiFactorEquity(Strategy):
 
     parameter_schema = [
         ParameterSpec("universe", list, [], "List of equity symbols", None, None),
-        ParameterSpec("factor_weights", dict, {}, "Factor weights: momentum, value, quality, low_risk", None, None),
-        ParameterSpec("min_factor_score", float, 0.0, "Minimum composite factor score for long", -1.0, 1.0),
+        ParameterSpec(
+            "factor_weights",
+            dict,
+            {},
+            "Factor weights: momentum, value, quality, low_risk",
+            None,
+            None,
+        ),
+        ParameterSpec(
+            "min_factor_score", float, 0.0, "Minimum composite factor score for long", -1.0, 1.0
+        ),
         ParameterSpec("max_positions", int, 10, "Maximum concurrent positions", 1, 50),
         ParameterSpec("rebalance_frequency", int, 21, "Rebalance every N days", 5, 63),
         ParameterSpec("use_shorting", bool, False, "Allow short positions", None, None),
-        ParameterSpec("require_point_in_time", bool, True, "Require point-in-time fundamental data", None, None),
-        ParameterSpec("data_available", bool, False, "Whether point-in-time data is available", None, None),
+        ParameterSpec(
+            "require_point_in_time",
+            bool,
+            True,
+            "Require point-in-time fundamental data",
+            None,
+            None,
+        ),
+        ParameterSpec(
+            "data_available", bool, False, "Whether point-in-time data is available", None, None
+        ),
     ]
 
     def __init__(self, **params):
@@ -100,12 +124,15 @@ class MultiFactorEquity(Strategy):
             )
 
         # Compute composite scores
-        weights = self.params.get("factor_weights", {
-            "momentum": 0.3,
-            "value": 0.25,
-            "quality": 0.25,
-            "low_risk": 0.2,
-        })
+        weights = self.params.get(
+            "factor_weights",
+            {
+                "momentum": 0.3,
+                "value": 0.25,
+                "quality": 0.25,
+                "low_risk": 0.2,
+            },
+        )
 
         composite_scores = {}
         for sym, scores in factor_scores.items():
@@ -127,10 +154,16 @@ class MultiFactorEquity(Strategy):
         ranked = sorted(composite_scores.items(), key=lambda x: x[1], reverse=True)
 
         # Select top longs
-        longs = [s for s, c in ranked if c >= self.params["min_factor_score"]][:self.params["max_positions"]]
+        longs = [s for s, c in ranked if c >= self.params["min_factor_score"]][
+            : self.params["max_positions"]
+        ]
 
         # Select shorts
-        shorts = [s for s, c in ranked if c <= -self.params["min_factor_score"]] if self.params["use_shorting"] else []
+        shorts = (
+            [s for s, c in ranked if c <= -self.params["min_factor_score"]]
+            if self.params["use_shorting"]
+            else []
+        )
 
         # Build allocation
         allocation = {}
@@ -162,7 +195,11 @@ class MultiFactorEquity(Strategy):
             confidence=0.8 if self._data_available else 0.3,
             metadata={
                 "allocation": allocation,
-                "factor_scores": {s: {k: float(v) for k, v in sc.items()} for s, sc in factor_scores.items() if s in allocation},
+                "factor_scores": {
+                    s: {k: float(v) for k, v in sc.items()}
+                    for s, sc in factor_scores.items()
+                    if s in allocation
+                },
                 "longs": longs,
                 "shorts": shorts,
             },

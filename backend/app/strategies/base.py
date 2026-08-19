@@ -5,11 +5,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class AssetClass(str, Enum):
+class AssetClass(StrEnum):
     CRYPTO = "CRYPTO"
     EQUITY = "EQUITY"
     ETF = "ETF"
@@ -20,7 +20,7 @@ class AssetClass(str, Enum):
     COMMODITY = "COMMODITY"
 
 
-class Timeframe(str, Enum):
+class Timeframe(StrEnum):
     M1 = "1m"
     M5 = "5m"
     M15 = "15m"
@@ -30,13 +30,13 @@ class Timeframe(str, Enum):
     D1 = "1d"
 
 
-class SignalDirection(str, Enum):
+class SignalDirection(StrEnum):
     LONG = "LONG"
     SHORT = "SHORT"
     FLAT = "FLAT"
 
 
-class StrategyStatus(str, Enum):
+class StrategyStatus(StrEnum):
     DRAFT = "DRAFT"
     BACKTESTED = "BACKTESTED"
     VALIDATED = "VALIDATED"
@@ -50,7 +50,7 @@ class StrategyStatus(str, Enum):
     DISABLED = "DISABLED"
 
 
-class StrategyFamily(str, Enum):
+class StrategyFamily(StrEnum):
     TREND = "trend"
     ROTATION = "rotation"
     REVERSION = "reversion"

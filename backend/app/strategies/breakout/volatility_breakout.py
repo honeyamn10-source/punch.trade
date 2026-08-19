@@ -15,23 +15,27 @@ ORB Variant:
 
 from __future__ import annotations
 
-from datetime import datetime, time as dt_time
-from typing import Any
+from datetime import datetime
 
 import numpy as np
 
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, StrategyFamily, Timeframe, register_strategy
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    StrategyFamily,
+    Timeframe,
+    register_strategy,
+)
 from ..indicators import (
     adx,
     atr,
     closes,
-    crossed_above,
-    crossed_below,
     donchian_high,
     donchian_low,
-    ema,
     percentile_rank,
-    slope,
 )
 
 
@@ -58,22 +62,44 @@ class VolatilityBreakout(Strategy):
         AssetClass.FOREX,
         AssetClass.COMMODITY,
     ]
-    supported_timeframes = [Timeframe.M5, Timeframe.M15, Timeframe.M30, Timeframe.H1, Timeframe.H4, Timeframe.D1]
+    supported_timeframes = [
+        Timeframe.M5,
+        Timeframe.M15,
+        Timeframe.M30,
+        Timeframe.H1,
+        Timeframe.H4,
+        Timeframe.D1,
+    ]
 
     warmup_bars = 100
 
     parameter_schema = [
         ParameterSpec("bb_period", int, 20, "Bollinger Bands period", 10, 50),
         ParameterSpec("bb_std", float, 2.0, "Bollinger Bands std multiplier", 1.5, 3.0),
-        ParameterSpec("bb_bandwidth_pct", float, 10.0, "Max Bollinger bandwidth percentile for compression", 5, 30),
+        ParameterSpec(
+            "bb_bandwidth_pct",
+            float,
+            10.0,
+            "Max Bollinger bandwidth percentile for compression",
+            5,
+            30,
+        ),
         ParameterSpec("atr_period", int, 14, "ATR period", 10, 30),
         ParameterSpec("atr_pct_max", float, 30.0, "Max ATR percentile for compression", 10, 50),
-        ParameterSpec("donchian_period", int, 20, "Donchian channel period for breakout level", 10, 50),
+        ParameterSpec(
+            "donchian_period", int, 20, "Donchian channel period for breakout level", 10, 50
+        ),
         ParameterSpec("adx_period", int, 14, "ADX period for trend confirmation", 10, 30),
         ParameterSpec("adx_min", float, 20.0, "Minimum ADX for trend confirmation", 10, 40),
-        ParameterSpec("volume_pct_min", float, 50.0, "Minimum volume percentile for confirmation", 30, 80),
-        ParameterSpec("range_contraction_lookback", int, 20, "Lookback for range contraction check", 10, 50),
-        ParameterSpec("range_contraction_pct", float, 50.0, "Range must contract to this percentile", 10, 80),
+        ParameterSpec(
+            "volume_pct_min", float, 50.0, "Minimum volume percentile for confirmation", 30, 80
+        ),
+        ParameterSpec(
+            "range_contraction_lookback", int, 20, "Lookback for range contraction check", 10, 50
+        ),
+        ParameterSpec(
+            "range_contraction_pct", float, 50.0, "Range must contract to this percentile", 10, 80
+        ),
         ParameterSpec("atr_stop_mult", float, 2.0, "ATR trailing stop multiplier", 1.0, 5.0),
         ParameterSpec("use_shorting", bool, True, "Allow short breakouts", None, None),
     ]
@@ -101,10 +127,10 @@ class VolatilityBreakout(Strategy):
         vol_pct_min = self.params["volume_pct_min"]
         rc_lookback = self.params["range_contraction_lookback"]
         rc_pct = self.params["range_contraction_pct"]
-        atr_mult = self.params["atr_stop_mult"]
-        use_short = self.params["use_shorting"]
+        self.params["atr_stop_mult"]
+        self.params["use_shorting"]
 
-        bars_up_to = bars[:current_idx + 1]
+        bars_up_to = bars[: current_idx + 1]
         c_up_to = closes(bars_up_to)
 
         # Compute indicators
@@ -129,7 +155,7 @@ class VolatilityBreakout(Strategy):
         ranges = highs_arr - lows_arr
         max_range = np.full_like(ranges, np.nan)
         for i in range(rc_lookback - 1, len(ranges)):
-            window = ranges[i - rc_lookback + 1:i + 1]
+            window = ranges[i - rc_lookback + 1 : i + 1]
             valid = window[~np.isnan(window)]
             if len(valid) > 0:
                 max_range[i] = np.max(valid)
@@ -162,7 +188,9 @@ class VolatilityBreakout(Strategy):
         # Signal logic
         if compressed and vol_ok and adx_ok:
             if breakout_long:
-                stop_loss = price - self.params["atr_stop_mult"] * (atr_val if not np.isnan(atr_val) else price * 0.02)
+                stop_loss = price - self.params["atr_stop_mult"] * (
+                    atr_val if not np.isnan(atr_val) else price * 0.02
+                )
                 return Signal(
                     strategy_id=self.strategy_id,
                     symbol=bars[idx].get("symbol", "UNKNOWN"),
@@ -173,7 +201,9 @@ class VolatilityBreakout(Strategy):
                     stop_loss=stop_loss,
                     metadata={
                         "compression": True,
-                        "bb_bandwidth_pct": float(bb_bw_pct_arr[idx]) if idx < len(bb_bw_pct_arr) else None,
+                        "bb_bandwidth_pct": float(bb_bw_pct_arr[idx])
+                        if idx < len(bb_bw_pct_arr)
+                        else None,
                         "atr_pct": float(atr_pct[idx]) if idx < len(atr_pct) else None,
                         "adx": float(adx_val) if idx < len(adx_vals) else None,
                         "vol_pct": float(vol_pct[idx]) if idx < len(vol_pct) else None,
@@ -182,7 +212,9 @@ class VolatilityBreakout(Strategy):
                 )
 
             if self.params["use_shorting"] and breakout_short:
-                stop_loss = price + self.params["atr_stop_mult"] * (atr_val if not np.isnan(atr_val) else price * 0.02)
+                stop_loss = price + self.params["atr_stop_mult"] * (
+                    atr_val if not np.isnan(atr_val) else price * 0.02
+                )
                 return Signal(
                     strategy_id=self.strategy_id,
                     symbol=bars[idx].get("symbol", "UNKNOWN"),
@@ -208,12 +240,18 @@ class VolatilityBreakout(Strategy):
         mid = self._sma(values, period)
         std = np.full_like(values, np.nan)
         for i in range(period - 1, len(values)):
-            window = values[i - period + 1:i + 1]
+            window = values[i - period + 1 : i + 1]
             if not np.any(np.isnan(window)):
                 std[i] = np.std(window)
         upper = mid + std_mult * std
         lower = mid - std_mult * std
-        return {"upper": upper, "mid": mid, "lower": lower, "std": std, "bandwidth": (upper - lower) / np.where(mid == 0, 1, mid)}
+        return {
+            "upper": upper,
+            "mid": mid,
+            "lower": lower,
+            "std": std,
+            "bandwidth": (upper - lower) / np.where(mid == 0, 1, mid),
+        }
 
     def _sma(self, values: np.ndarray, period: int) -> np.ndarray:
         if period <= 1:
@@ -221,7 +259,7 @@ class VolatilityBreakout(Strategy):
         out = np.full_like(values, np.nan)
         n = len(values)
         for i in range(period - 1, n):
-            window = values[i - period + 1:i + 1]
+            window = values[i - period + 1 : i + 1]
             if not np.any(np.isnan(window)):
                 out[i] = np.mean(window)
         return out

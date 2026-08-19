@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
-
-import numpy as np
 
 
 class CostProfileType(Enum):
     """Predefined market-specific cost profiles."""
 
-    CRYPTO_LIQUID = "crypto_liquid"      # BTC/USDT, ETH/USDT on major exchanges
-    CRYPTO_ALT = "crypto_alt"            # Lower liquidity crypto
-    US_LARGE_CAP = "us_large_cap"        # SPY, QQQ, AAPL, MSFT
-    US_SMALL_CAP = "us_small_cap"        # Small/micro cap US equities
-    INDIA_CASH = "india_cash"            # NSE/BSE cash equities
-    INDIA_FUTURES = "india_futures"      # NSE F&O
-    FOREX_MAJOR = "forex_major"          # EUR/USD, GBP/USD, USD/JPY
-    FOREX_MINOR = "forex_minor"          # Cross pairs, EM currencies
+    CRYPTO_LIQUID = "crypto_liquid"  # BTC/USDT, ETH/USDT on major exchanges
+    CRYPTO_ALT = "crypto_alt"  # Lower liquidity crypto
+    US_LARGE_CAP = "us_large_cap"  # SPY, QQQ, AAPL, MSFT
+    US_SMALL_CAP = "us_small_cap"  # Small/micro cap US equities
+    INDIA_CASH = "india_cash"  # NSE/BSE cash equities
+    INDIA_FUTURES = "india_futures"  # NSE F&O
+    FOREX_MAJOR = "forex_major"  # EUR/USD, GBP/USD, USD/JPY
+    FOREX_MINOR = "forex_minor"  # Cross pairs, EM currencies
     COMMODITY_FUTURES = "commodity_futures"  # Gold, oil futures
 
 
@@ -31,13 +28,13 @@ class CostProfile:
     name: str
 
     # Commission (per side, as fraction of notional)
-    commission_bps: float = 1.0          # 1 bps = 0.01%
+    commission_bps: float = 1.0  # 1 bps = 0.01%
 
     # Spread (as fraction of mid price)
-    spread_bps: float = 5.0              # Typical spread in bps
+    spread_bps: float = 5.0  # Typical spread in bps
 
     # Slippage (as fraction of mid price, additional to spread)
-    slippage_bps: float = 2.0            # Expected slippage in bps
+    slippage_bps: float = 2.0  # Expected slippage in bps
 
     # Latency (ms) - affects slippage during fast moves
     latency_ms: int = 50
@@ -72,8 +69,8 @@ COST_PROFILES = {
     CostProfileType.CRYPTO_LIQUID: CostProfile(
         profile_type=CostProfileType.CRYPTO_LIQUID,
         name="Crypto Liquid (BTC/USDT, ETH/USDT)",
-        commission_bps=2.0,      # 0.02% per side (taker)
-        spread_bps=1.0,          # Very tight
+        commission_bps=2.0,  # 0.02% per side (taker)
+        spread_bps=1.0,  # Very tight
         slippage_bps=3.0,
         latency_ms=20,
         min_tick=0.01,
@@ -96,7 +93,7 @@ COST_PROFILES = {
     CostProfileType.US_LARGE_CAP: CostProfile(
         profile_type=CostProfileType.US_LARGE_CAP,
         name="US Large Cap (SPY, QQQ, AAPL)",
-        commission_bps=0.5,      # $0.005/share typical
+        commission_bps=0.5,  # $0.005/share typical
         spread_bps=1.0,
         slippage_bps=2.0,
         latency_ms=10,
@@ -116,7 +113,7 @@ COST_PROFILES = {
     CostProfileType.INDIA_CASH: CostProfile(
         profile_type=CostProfileType.INDIA_CASH,
         name="India NSE/BSE Cash",
-        commission_bps=2.5,      # 0.025% + STT
+        commission_bps=2.5,  # 0.025% + STT
         spread_bps=5.0,
         slippage_bps=5.0,
         latency_ms=50,
@@ -185,10 +182,10 @@ class CostEngine:
     def estimate_trade_cost(
         self,
         symbol: str,
-        side: str,          # "buy" or "sell"
+        side: str,  # "buy" or "sell"
         quantity: float,
         price: float,
-        profile: Optional[CostProfile] = None,
+        profile: CostProfile | None = None,
         is_maker: bool = False,
     ) -> dict:
         """Estimate total cost for a trade."""
@@ -222,7 +219,7 @@ class CostEngine:
         side: str,
         quantity: float,
         price: float,
-        profile: Optional[CostProfile] = None,
+        profile: CostProfile | None = None,
     ) -> dict:
         """Run cost sensitivity analysis across scenarios."""
         profile = profile or self.default_profile

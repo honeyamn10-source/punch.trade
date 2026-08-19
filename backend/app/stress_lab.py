@@ -15,15 +15,12 @@ Stress scenarios:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
-
-import numpy as np
 
 
 class StressType(Enum):
     """Types of stress scenarios."""
+
     SPREAD_WIDENING = "spread_widening"
     SLIPPAGE_INCREASE = "slippage_increase"
     LATENCY_DELAY = "latency_delay"
@@ -40,6 +37,7 @@ class StressType(Enum):
 @dataclass
 class StressScenario:
     """Defines a single stress scenario."""
+
     stress_type: StressType
     name: str
     description: str
@@ -192,6 +190,7 @@ STRESS_SCENARIOS = [
 @dataclass
 class StressResult:
     """Result of a stress test."""
+
     scenario: StressScenario
     base_metrics: dict
     stressed_metrics: dict
@@ -210,7 +209,7 @@ class StressLab:
         self,
         strategy_metrics: dict,
         scenario: StressScenario,
-        portfolio_state: Optional[dict] = None,
+        portfolio_state: dict | None = None,
     ) -> StressResult:
         """Run a single stress scenario against strategy metrics."""
         base = strategy_metrics.copy()
@@ -219,13 +218,25 @@ class StressLab:
         # Apply scenario-specific transformations
         if scenario.stress_type == StressType.SPREAD_WIDENING:
             mult = scenario.params.get("spread_multiplier", 2.0)
-            stressed["cost_bps"] = base.get("cost_bps", 0) * scenario.params.get("spread_multiplier", 1.0)
-            stressed["net_return"] = base.get("net_return", 0) - (base.get("cost_bps", 0) * (scenario.params.get("spread_multiplier", 1.0) - 1.0) / 10000)
+            stressed["cost_bps"] = base.get("cost_bps", 0) * scenario.params.get(
+                "spread_multiplier", 1.0
+            )
+            stressed["net_return"] = base.get("net_return", 0) - (
+                base.get("cost_bps", 0)
+                * (scenario.params.get("spread_multiplier", 1.0) - 1.0)
+                / 10000
+            )
 
         elif scenario.stress_type == StressType.SLIPPAGE_INCREASE:
             mult = scenario.params.get("slippage_multiplier", 2.0)
-            stressed["cost_bps"] = base.get("cost_bps", 0) * scenario.params.get("slippage_multiplier", 1.0)
-            stressed["net_return"] = base.get("net_return", 0) - (base.get("cost_bps", 0) * (scenario.params.get("slippage_multiplier", 1.0) - 1.0) / 10000)
+            stressed["cost_bps"] = base.get("cost_bps", 0) * scenario.params.get(
+                "slippage_multiplier", 1.0
+            )
+            stressed["net_return"] = base.get("net_return", 0) - (
+                base.get("cost_bps", 0)
+                * (scenario.params.get("slippage_multiplier", 1.0) - 1.0)
+                / 10000
+            )
 
         elif scenario.stress_type == StressType.OVERNIGHT_GAP:
             gap = scenario.params.get("gap_pct", 0)
@@ -258,10 +269,13 @@ class StressLab:
 
         elif scenario.stress_type == StressType.FEED_OUTAGE:
             stressed["data_quality"] = "outage"
-            stressed["signal_latency_ms"] = base.get("signal_latency_ms", 0) + scenario.params.get("outage_minutes", 30) * 60 * 1000
+            stressed["signal_latency_ms"] = (
+                base.get("signal_latency_ms", 0)
+                + scenario.params.get("outage_minutes", 30) * 60 * 1000
+            )
 
         elif scenario.stress_type == StressType.CORRELATION_BREAKDOWN:
-            corr = scenario.params.get("correlation_target", 0.95)
+            scenario.params.get("correlation_target", 0.95)
             stressed["correlation_risk"] = "extreme"
             stressed["diversification_ratio"] = 1.0  # No diversification benefit
 
@@ -279,7 +293,7 @@ class StressLab:
             if b != 0:
                 impact[key] = (s - b) / abs(b) * 100
             else:
-                impact[key] = float('inf') if s != 0 else 0
+                impact[key] = float("inf") if s != 0 else 0
 
         # Determine pass/fail
         passed = True
@@ -306,8 +320,8 @@ class StressLab:
     def run_all_scenarios(
         self,
         strategy_metrics: dict,
-        portfolio_state: Optional[dict] = None,
-        scenario_filter: Optional[list[StressType]] = None,
+        portfolio_state: dict | None = None,
+        scenario_filter: list[StressType] | None = None,
     ) -> list[StressResult]:
         """Run all stress scenarios (or filtered subset)."""
         if scenario_filter:

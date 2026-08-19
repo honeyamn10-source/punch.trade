@@ -14,12 +14,16 @@ If required data does not exist: framework only.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
 
-import numpy as np
-
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, StrategyFamily, Timeframe, register_strategy
-from ..indicators import closes
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    Timeframe,
+    register_strategy,
+)
 
 
 class CarryDomain:
@@ -53,16 +57,37 @@ class CarryFramework(Strategy):
     warmup_bars = 60
 
     parameter_schema = [
-        ParameterSpec("domain", str, "fx", "Carry domain: fx, commodity, crypto_funding, crypto_basis", None, None),
+        ParameterSpec(
+            "domain",
+            str,
+            "fx",
+            "Carry domain: fx, commodity, crypto_funding, crypto_basis",
+            None,
+            None,
+        ),
         ParameterSpec("universe", list, [], "Symbols in universe", None, None),
         ParameterSpec("carry_field", str, "carry", "Field name for carry data in bars", None, None),
-        ParameterSpec("signal_field", str, "carry_signal", "Field name for pre-computed signal in bars", None, None),
+        ParameterSpec(
+            "signal_field",
+            str,
+            "carry_signal",
+            "Field name for pre-computed signal in bars",
+            None,
+            None,
+        ),
         ParameterSpec("min_carry", float, 0.0, "Minimum annualized carry for entry", 0.0, 0.1),
         ParameterSpec("max_positions", int, 5, "Maximum concurrent positions", 1, 20),
         ParameterSpec("rebalance_frequency", int, 1, "Rebalance every N bars", 1, 20),
         ParameterSpec("use_shorting", bool, True, "Allow short negative carry", None, None),
         ParameterSpec("stop_loss_atr_mult", float, 2.0, "ATR stop loss multiplier", 1.0, 5.0),
-        ParameterSpec("data_required", bool, True, "Require actual carry data (not framework-only)", None, None),
+        ParameterSpec(
+            "data_required",
+            bool,
+            True,
+            "Require actual carry data (not framework-only)",
+            None,
+            None,
+        ),
     ]
 
     def __init__(self, **params):
@@ -86,8 +111,8 @@ class CarryFramework(Strategy):
         domain = self.params["domain"]
         carry_field = self.params["carry_field"]
         signal_field = self.params["signal_field"]
-        min_carry = self.params["min_carry"]
-        use_short = self.params["use_shorting"]
+        self.params["min_carry"]
+        self.params["use_shorting"]
 
         # Check if carry data is available
         self._data_available = self._check_carry_data(bars, current_idx, carry_field, signal_field)
@@ -123,10 +148,16 @@ class CarryFramework(Strategy):
         ranked = sorted(carry_scores.items(), key=lambda x: x[1], reverse=True)
 
         # Select top longs
-        longs = [s for s, c in ranked if c >= self.params["min_carry"]][:self.params["max_positions"]]
+        longs = [s for s, c in ranked if c >= self.params["min_carry"]][
+            : self.params["max_positions"]
+        ]
 
         # Select shorts (negative carry)
-        shorts = [s for s, c in ranked if c <= -self.params["min_carry"]] if self.params["use_shorting"] else []
+        shorts = (
+            [s for s, c in ranked if c <= -self.params["min_carry"]]
+            if self.params["use_shorting"]
+            else []
+        )
 
         # Build allocation
         allocation = {}
@@ -166,7 +197,9 @@ class CarryFramework(Strategy):
             },
         )
 
-    def _check_carry_data(self, bars: list[dict], current_idx: int, carry_field: str, signal_field: str) -> bool:
+    def _check_carry_data(
+        self, bars: list[dict], current_idx: int, carry_field: str, signal_field: str
+    ) -> bool:
         """Check if carry data is available in recent bars."""
         for i in range(max(0, current_idx - 10), current_idx + 1):
             bar = bars[i]
@@ -174,7 +207,9 @@ class CarryFramework(Strategy):
                 return True
         return False
 
-    def _get_carry(self, bars: list[dict], current_idx: int, symbol: str, carry_field: str, signal_field: str) -> Optional[float]:
+    def _get_carry(
+        self, bars: list[dict], current_idx: int, symbol: str, carry_field: str, signal_field: str
+    ) -> float | None:
         """Extract carry value for a symbol at current_idx."""
         for i in range(current_idx, max(0, current_idx - 5), -1):
             bar = bars[i]
@@ -200,8 +235,17 @@ class FXCarry(CarryFramework):
 
     parameter_schema = [
         ParameterSpec("domain", str, "fx", "Carry domain", None, None),
-        ParameterSpec("currency_pairs", list, [], "List of FX pairs (e.g., ['EURUSD', 'GBPUSD'])", None, None),
-        ParameterSpec("rate_source", str, "central_bank", "Rate source: central_bank, bloomberg, fred", None, None),
+        ParameterSpec(
+            "currency_pairs", list, [], "List of FX pairs (e.g., ['EURUSD', 'GBPUSD'])", None, None
+        ),
+        ParameterSpec(
+            "rate_source",
+            str,
+            "central_bank",
+            "Rate source: central_bank, bloomberg, fred",
+            None,
+            None,
+        ),
         ParameterSpec("min_rate_diff", float, 0.01, "Minimum rate differential (1%)", 0.005, 0.05),
         ParameterSpec("max_positions", int, 5, "Maximum concurrent positions", 1, 10),
         ParameterSpec("rebalance_frequency", int, 5, "Rebalance every N days", 1, 20),
@@ -228,8 +272,12 @@ class CryptoFundingCarry(CarryFramework):
 
     parameter_schema = [
         ParameterSpec("domain", str, "crypto_funding", "Carry domain", None, None),
-        ParameterSpec("symbols", list, [], "List of crypto symbols (e.g., ['BTCUSDT', 'ETHUSDT'])", None, None),
-        ParameterSpec("funding_source", str, "binance", "Funding rate source: binance, bybit, okx", None, None),
+        ParameterSpec(
+            "symbols", list, [], "List of crypto symbols (e.g., ['BTCUSDT', 'ETHUSDT'])", None, None
+        ),
+        ParameterSpec(
+            "funding_source", str, "binance", "Funding rate source: binance, bybit, okx", None, None
+        ),
         ParameterSpec("min_funding_apy", float, 0.10, "Minimum funding APY (10%)", 0.05, 0.50),
         ParameterSpec("max_positions", int, 5, "Maximum concurrent positions", 1, 10),
         ParameterSpec("rebalance_frequency", int, 8, "Rebalance every N hours", 1, 24),

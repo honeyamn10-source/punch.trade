@@ -26,23 +26,27 @@ Architecture:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 import numpy as np
 
-from ..base import AssetClass, ParameterSpec, Signal, SignalDirection, Strategy, StrategyFamily, Timeframe, register_strategy
+from ..base import (
+    AssetClass,
+    ParameterSpec,
+    Signal,
+    SignalDirection,
+    Strategy,
+    StrategyFamily,
+    Timeframe,
+    register_strategy,
+)
 from ..indicators import (
     adx,
     atr,
     closes,
-    crossed_above,
-    crossed_below,
     donchian_high,
     donchian_low,
     ema,
-    normalize,
     percentile_rank,
     slope,
 )
@@ -69,7 +73,14 @@ class AdaptiveMultiHorizonTrend(Strategy):
         AssetClass.FOREX,
         AssetClass.COMMODITY,
     ]
-    supported_timeframes = [Timeframe.M5, Timeframe.M15, Timeframe.M30, Timeframe.H1, Timeframe.H4, Timeframe.D1]
+    supported_timeframes = [
+        Timeframe.M5,
+        Timeframe.M15,
+        Timeframe.M30,
+        Timeframe.H1,
+        Timeframe.H4,
+        Timeframe.D1,
+    ]
 
     warmup_bars = 100
 
@@ -86,7 +97,9 @@ class AdaptiveMultiHorizonTrend(Strategy):
         ParameterSpec("atr_period", int, 14, "ATR period for volatility", 10, 30),
         ParameterSpec("vol_percentile_high", float, 80.0, "High volatility percentile", 60, 95),
         ParameterSpec("vol_percentile_low", float, 20.0, "Low volatility percentile", 5, 40),
-        ParameterSpec("trend_breadth_threshold", float, 0.5, "Minimum trend breadth for signal", 0.0, 1.0),
+        ParameterSpec(
+            "trend_breadth_threshold", float, 0.5, "Minimum trend breadth for signal", 0.0, 1.0
+        ),
         ParameterSpec("weight_short", float, 0.2, "Weight for short horizon", 0.0, 1.0),
         ParameterSpec("weight_medium", float, 0.3, "Weight for medium horizon", 0.0, 1.0),
         ParameterSpec("weight_long", float, 0.5, "Weight for long horizon", 0.0, 1.0),
@@ -98,7 +111,9 @@ class AdaptiveMultiHorizonTrend(Strategy):
     def __init__(self, **params):
         super().__init__(**params)
         # Normalize weights
-        total = self.params["weight_short"] + self.params["weight_medium"] + self.params["weight_long"]
+        total = (
+            self.params["weight_short"] + self.params["weight_medium"] + self.params["weight_long"]
+        )
         if total > 0:
             self.params["weight_short"] /= total
             self.params["weight_medium"] /= total
@@ -130,7 +145,7 @@ class AdaptiveMultiHorizonTrend(Strategy):
 
         # Compute all indicators up to current_idx (no lookahead)
         # We need indicator values for the full series up to current_idx
-        bars_up_to = bars[:current_idx + 1]
+        bars_up_to = bars[: current_idx + 1]
         c_up_to = closes(bars_up_to)
 
         # Momentum (rate of change)
@@ -184,30 +199,13 @@ class AdaptiveMultiHorizonTrend(Strategy):
         norm_dc = self._normalize_component(dc_pos, idx, lookback=50)
 
         # Build trend score for each horizon
-        trend_short = (
-            0.4 * norm_short
-            + 0.3 * norm_slope_s
-            + 0.2 * norm_pos_s
-            + 0.1 * norm_dc
-        )
-        trend_medium = (
-            0.4 * norm_medium
-            + 0.3 * norm_slope_m
-            + 0.2 * norm_pos_m
-            + 0.1 * norm_dc
-        )
-        trend_long = (
-            0.4 * norm_long
-            + 0.3 * norm_slope_l
-            + 0.2 * norm_pos_l
-            + 0.1 * norm_dc
-        )
+        trend_short = 0.4 * norm_short + 0.3 * norm_slope_s + 0.2 * norm_pos_s + 0.1 * norm_dc
+        trend_medium = 0.4 * norm_medium + 0.3 * norm_slope_m + 0.2 * norm_pos_m + 0.1 * norm_dc
+        trend_long = 0.4 * norm_long + 0.3 * norm_slope_l + 0.2 * norm_pos_l + 0.1 * norm_dc
 
         # Weighted trend breadth (agreement across horizons)
         trend_breadth = (
-            w_s * np.sign(trend_short)
-            + w_m * np.sign(trend_medium)
-            + w_l * np.sign(trend_long)
+            w_s * np.sign(trend_short) + w_m * np.sign(trend_medium) + w_l * np.sign(trend_long)
         )
 
         # Regime filters
@@ -221,10 +219,14 @@ class AdaptiveMultiHorizonTrend(Strategy):
         trend_dir = np.sign(trend_breadth)
 
         # Previous breadth for crossover detection
-        prev_breadth = trend_breadth if idx == 0 else (
-            w_s * np.sign(self._normalize_component(mom_short, idx - 1, 100))
-            + w_m * np.sign(self._normalize_component(mom_medium, idx - 1, 100))
-            + w_l * np.sign(self._normalize_component(mom_long, idx - 1, 100))
+        prev_breadth = (
+            trend_breadth
+            if idx == 0
+            else (
+                w_s * np.sign(self._normalize_component(mom_short, idx - 1, 100))
+                + w_m * np.sign(self._normalize_component(mom_medium, idx - 1, 100))
+                + w_l * np.sign(self._normalize_component(mom_long, idx - 1, 100))
+            )
         )
         prev_dir = np.sign(prev_breadth)
 
@@ -245,12 +247,16 @@ class AdaptiveMultiHorizonTrend(Strategy):
         atr_val = atr_vals[idx] if idx < len(atr_vals) else np.nan
 
         if direction == SignalDirection.LONG:
-            stop_loss = current_price - self.params["exit_atr_mult"] * (atr_val if not np.isnan(atr_val) else current_price * 0.02)
+            stop_loss = current_price - self.params["exit_atr_mult"] * (
+                atr_val if not np.isnan(atr_val) else current_price * 0.02
+            )
             # Donchian exit
             if idx < len(dc_low):
                 stop_loss = max(stop_loss, dc_low[idx])
         else:
-            stop_loss = current_price + self.params["exit_atr_mult"] * (atr_val if not np.isnan(atr_val) else current_price * 0.02)
+            stop_loss = current_price + self.params["exit_atr_mult"] * (
+                atr_val if not np.isnan(atr_val) else current_price * 0.02
+            )
             if idx < len(dc_high):
                 stop_loss = min(stop_loss, dc_high[idx])
 
@@ -289,7 +295,9 @@ class AdaptiveMultiHorizonTrend(Strategy):
                 out[i] = (c[i] - ema_vals[i]) / ema_vals[i]
         return out
 
-    def _donchian_position(self, c: np.ndarray, dc_high: np.ndarray, dc_low: np.ndarray) -> np.ndarray:
+    def _donchian_position(
+        self, c: np.ndarray, dc_high: np.ndarray, dc_low: np.ndarray
+    ) -> np.ndarray:
         """Position within Donchian channel: -1 at bottom, +1 at top, 0 at middle."""
         out = np.full_like(c, np.nan)
         for i in range(len(c)):
@@ -305,7 +313,7 @@ class AdaptiveMultiHorizonTrend(Strategy):
             lookback = idx
         if lookback < 10:
             return 0.0
-        window = comp[idx - lookback + 1:idx + 1]
+        window = comp[idx - lookback + 1 : idx + 1]
         valid = window[~np.isnan(window)]
         if len(valid) < 5:
             return 0.0

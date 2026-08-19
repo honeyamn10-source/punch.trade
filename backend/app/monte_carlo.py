@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
 
 import numpy as np
 
@@ -21,6 +20,7 @@ import numpy as np
 @dataclass
 class MonteCarloConfig:
     """Configuration for Monte Carlo simulation."""
+
     iterations: int = 500
     seed: int = 42
     method: str = "bootstrap"  # "bootstrap" | "parametric"
@@ -31,6 +31,7 @@ class MonteCarloConfig:
 @dataclass
 class MonteCarloResult:
     """Results from Monte Carlo simulation."""
+
     config: MonteCarloConfig
     paths: np.ndarray  # Shape: (iterations, periods)
     percentiles: dict  # percentile -> array of values over time
@@ -54,7 +55,7 @@ class MonteCarloEngine:
         self,
         returns: np.ndarray,
         initial_equity: float = 100000.0,
-        periods: Optional[int] = None,
+        periods: int | None = None,
     ) -> MonteCarloResult:
         """Run Monte Carlo simulation on return series.
 
@@ -118,15 +119,15 @@ class MonteCarloEngine:
 
         if block_size > 1:
             # Block bootstrap
-            n_blocks = (n + block_size - 1) // block_size
+            (n + block_size - 1) // block_size
             paths = np.zeros((n_iter, n_periods))
             for i in range(n_iter):
                 idx = 0
                 while idx < n_periods:
                     start = self.rng.randint(0, n - block_size + 1)
-                    block = returns[start:start + block_size]
+                    block = returns[start : start + block_size]
                     end = min(idx + block_size, n_periods)
-                    paths[i, idx:end] = block[:end - idx]
+                    paths[i, idx:end] = block[: end - idx]
                     idx += block_size
         else:
             # Simple bootstrap
@@ -193,7 +194,7 @@ def run_monte_carlo(
     initial_equity: float = 100000.0,
     iterations: int = 500,
     seed: int = 42,
-    periods: Optional[int] = None,
+    periods: int | None = None,
     method: str = "bootstrap",
 ) -> MonteCarloResult:
     """Convenience function to run Monte Carlo simulation."""
@@ -232,7 +233,7 @@ def bootstrap_expectancy(
     }
 
 
-def analyze_monte_carlo_result(result: "MonteCarloResult") -> dict:
+def analyze_monte_carlo_result(result: MonteCarloResult) -> dict:
     """Analyze Monte Carlo result and return summary statistics."""
     return {
         "ending_equity": {
