@@ -256,6 +256,8 @@ class FXCarry(CarryFramework):
         params["domain"] = "fx"
         params["universe"] = params.get("currency_pairs", [])
         super().__init__(**params)
+        for spec in CarryFramework.parameter_schema:
+            self.params.setdefault(spec.name, params.get(spec.name, spec.default))
 
 
 # Crypto Funding Carry specialization
@@ -288,3 +290,5 @@ class CryptoFundingCarry(CarryFramework):
         params["domain"] = "crypto_funding"
         params["universe"] = params.get("symbols", [])
         super().__init__(**params)
+        for spec in CarryFramework.parameter_schema:
+            self.params.setdefault(spec.name, params.get(spec.name, spec.default))

@@ -22,6 +22,13 @@ from .base import (
 # Import strategy modules to register them
 with contextlib.suppress(ImportError):
     from .trend import adaptive_trend  # noqa: F401
+with contextlib.suppress(ImportError):
+    from .alpha import (  # noqa: F401
+        hurst_reversion,
+        trend_carry,
+        vol_managed_momentum,
+        volume_flow,
+    )
 
 # ---------------------------------------------------------------
 # Backward compatibility with legacy strategies.py
