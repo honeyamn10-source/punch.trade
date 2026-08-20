@@ -1,13 +1,12 @@
 """Tests for Tactical Rotation strategy."""
 
-import pytest
-
 from app.strategies.base import SignalDirection
-from app.strategies.rotation.tactical_rotation import TacticalRotation, RotationRegime
+from app.strategies.rotation.tactical_rotation import TacticalRotation
 
 
 def _sample_multi_asset_bars(n: int = 500, seed: int = 42) -> list[dict]:
     import numpy as np
+
     rng = np.random.RandomState(seed)
     symbols = ["SPY", "QQQ", "IWM", "TLT", "GLD"]
     bars = []
@@ -26,15 +25,17 @@ def _sample_multi_asset_bars(n: int = 500, seed: int = 42) -> list[dict]:
                 drift, vol = 0.0001, 0.012
 
             ret = rng.normal(drift, vol)
-            bars.append({
-                "ts": float(base_ts),
-                "symbol": sym,
-                "open": 100 * (1 + rng.normal(0, 0.001)),
-                "high": 100 * (1 + abs(rng.normal(0, 0.002))),
-                "low": 100 * (1 - abs(rng.normal(0, 0.002))),
-                "close": 100 * (1 + ret),
-                "volume": float(rng.lognormal(10, 0.5)),
-            })
+            bars.append(
+                {
+                    "ts": float(base_ts),
+                    "symbol": sym,
+                    "open": 100 * (1 + rng.normal(0, 0.001)),
+                    "high": 100 * (1 + abs(rng.normal(0, 0.002))),
+                    "low": 100 * (1 - abs(rng.normal(0, 0.002))),
+                    "close": 100 * (1 + ret),
+                    "volume": float(rng.lognormal(10, 0.5)),
+                }
+            )
     return bars
 
 

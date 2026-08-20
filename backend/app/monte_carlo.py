@@ -229,7 +229,7 @@ def bootstrap_expectancy(
         "expectancy_p50": pct(0.50),
         "expectancy_p95": pct(0.95),
         "prob_positive": positive,
-        "real_edge": positive >= 0.60,
+        "real_edge": bool(positive >= 0.60),
     }
 
 

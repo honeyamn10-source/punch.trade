@@ -37,6 +37,7 @@ correlation. Every response carries `X-Request-Id`.
 |---|---|---|
 | GET | `/api/candles?symbol=&limit=` | latest bars |
 | GET | `/api/analytics` | qty-weighted realized PnL from closed positions |
+| GET | `/api/v1/market/candles?symbol=&timeframe=&limit=` | bars; crypto bars carry `funding` (perp settlement rate at/before bar open, when available) |
 
 ### Signals & strategies
 | Method | Path |
@@ -68,10 +69,19 @@ the records.
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/risk/state` | mode, armed, breaker, recon gate, limits |
+| GET | `/api/risk/shield` | risk state incl. `shieldOn` |
+| POST | `/api/risk/shield` | `{on: bool}` — shield toggles the pre-trade gate; while on, orders → `SHIELD_ACTIVE` 409 |
 | POST | `/api/risk/sizing` | `{equity, riskPct, entry, stop}` → `{qty, riskAmount, riskPerShare}` |
 | POST | `/api/risk/breaker/reset` | manual circuit-breaker reset |
 | POST | `/api/risk/arm` | `{broker}` — arm a real broker in LIVE mode |
 | POST | `/api/system/stop` | emergency stop |
+
+### Research / analysis
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/stress/scenarios` | 17 named stress scenarios (type, severity, probability) |
+| POST | `/api/stress/run` | `{metrics: {netReturn, maxDrawdownPct, sharpe, costBps, volatility}, scenarioTypes?, portfolioState?}` → per-scenario pass/fail + totals |
+| POST | `/api/v1/analysis/monte-carlo` | `{returns: [...], iterations?, initialEquity?, seed?, method?}` → equity/drawdown distributions, bootstrap expectancy, `real_edge` (needs ≥10 returns) |
 
 ### AI
 | Method | Path |

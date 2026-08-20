@@ -1,12 +1,8 @@
 """Tests for Stress Lab."""
 
-import pytest
-
 from app.stress_lab import (
     StressLab,
-    StressScenario,
     StressType,
-    STRESS_SCENARIOS,
 )
 
 
@@ -95,7 +91,9 @@ class TestStressLab:
 
     def test_correlation_breakdown(self):
         lab = StressLab()
-        corr_scenarios = [s for s in lab.scenarios if s.stress_type == StressType.CORRELATION_BREAKDOWN]
+        corr_scenarios = [
+            s for s in lab.scenarios if s.stress_type == StressType.CORRELATION_BREAKDOWN
+        ]
         scenario = corr_scenarios[0]
 
         base_metrics = {"correlation_risk": 0.0}  # numeric for impact calculation

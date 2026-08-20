@@ -29,6 +29,7 @@ class BinanceProvider(MarketDataProvider):
         super().__init__()
         self._markets: dict | None = None
         self._markets_ts: float = 0.0
+        self._funding_cache: dict[str, tuple[float, list[dict]]] = {}
 
     def _exchange(self):
         if ccxt is None:
@@ -127,8 +128,12 @@ class BinanceProvider(MarketDataProvider):
             rows = self._exchange().fetch_ohlcv(p, tf, limit=limit or 300)
         except Exception as e:
             self._fail(ProviderErrorCode.PROVIDER_OFFLINE, f"binance OHLCV failed: {e}")
-        return [
-            candle_dict(
+        funding = self._funding_for(p)
+        out = []
+        for r in rows:
+            if r[0] / 1000 < (start or 0) or (end is not None and r[0] / 1000 > end):
+                continue
+            bar = candle_dict(
                 instrument.symbol,
                 timeframe,
                 r[0] / 1000 + TIMEFRAME_SECONDS.get(timeframe, 60),
@@ -139,6 +144,60 @@ class BinanceProvider(MarketDataProvider):
                 r[5],
                 "binance",
             )
+            f = self._funding_at(bar["open_time"], funding)
+            if f is not None:
+                bar["funding"] = f
+            out.append(bar)
+        return out
+
+    # ------------------------------------------------------------ funding --
+    def get_funding_history(self, instrument: Instrument, limit: int = 500) -> list[dict]:
+        """Perpetual funding history from Binance FAPI (public, keyless).
+
+        Returns [{ts, rate, symbol}] or [] when the swap feed is
+        unavailable — funding is optional enrichment, never fatal.
+        """
+        if ccxt is None:
+            return []
+        p = provider_symbol_for("binance", instrument)
+        try:
+            ex = ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "swap"}})
+            rows = ex.fetch_funding_rate_history(p, limit=limit)
+        except Exception as e:  # noqa: BLE001
+            self.last_error = f"binance funding: {e}"
+            return []
+        return [
+            {"ts": r.get("timestamp", 0) / 1000, "rate": r.get("fundingRate", 0.0), "symbol": p}
             for r in rows
-            if r[0] / 1000 >= (start or 0) and (end is None or r[0] / 1000 <= end)
         ]
+
+    def _funding_for(self, provider_symbol: str) -> list[dict]:
+        cached = self._funding_cache.get(provider_symbol)
+        if cached and time.time() - cached[0] < 120:
+            return cached[1]
+        try:
+            ex = ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "swap"}})
+            rows = ex.fetch_funding_rate_history(provider_symbol, limit=500)
+        except Exception as e:  # noqa: BLE001
+            self.last_error = f"binance funding: {e}"
+            self._funding_cache[provider_symbol] = (time.time(), [])
+            return []
+        history = [
+            {"ts": r.get("timestamp", 0) / 1000, "rate": r.get("fundingRate", 0.0)}
+            for r in rows
+            if r.get("fundingRate") is not None
+        ]
+        history.sort(key=lambda h: h["ts"])
+        self._funding_cache[provider_symbol] = (time.time(), history)
+        return history
+
+    @staticmethod
+    def _funding_at(open_time: float, funding: list[dict]) -> float | None:
+        """Most recent funding rate settled at or before bar open."""
+        best = None
+        for f in funding:
+            if f["ts"] <= open_time:
+                best = f["rate"]
+            else:
+                break
+        return best

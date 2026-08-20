@@ -40,6 +40,7 @@ class RiskError(Exception):
 _mode = config.MODE
 _armed: list[str] = []  # live brokers explicitly armed this session
 _emergency_stop = False
+_shield_on = False  # Risk Shield: blocks ALL new orders while engaged
 _started_at = time.time()
 
 
@@ -101,11 +102,27 @@ def stop() -> dict:
     return status()
 
 
+def shield_on() -> bool:
+    return _shield_on
+
+
+def set_shield(on: bool) -> dict:
+    """Engage/disengage the Risk Shield — hard gate on ALL new orders.
+
+    Unlike the emergency stop this does not change mode; it suspends
+    execution while engaged so strategies keep producing signals.
+    """
+    global _shield_on
+    _shield_on = bool(on)
+    return status()
+
+
 def status() -> dict:
     return {
         "mode": _mode,
         "armed": list(_armed),
         "emergencyStop": _emergency_stop,
+        "shieldOn": _shield_on,
         "startedAt": _started_at,
         "uptimeSec": round(time.time() - _started_at, 1),
         "signalsTtlSec": config.SIGNAL_TTL_SECONDS,
@@ -127,6 +144,12 @@ def check(
     stale_after: float | None = None,
 ) -> None:
     """Pre-trade checklist. Raises RiskError on the first failed rule."""
+    if _shield_on:
+        raise RiskError(
+            "SHIELD_ACTIVE",
+            "risk shield engaged — all new orders are blocked until it is lifted",
+            status=409,
+        )
     if _mode == "research":
         raise RiskError("MODE_BLOCKED", "research mode: order execution is disabled", status=409)
     if broker == "paper":

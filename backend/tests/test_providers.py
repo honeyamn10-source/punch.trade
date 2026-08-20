@@ -9,8 +9,7 @@ import time
 import httpx
 import pytest
 
-import app.rate_limit as rate_limit
-from app.instruments import AssetClass, Instrument, parse_instrument, provider_symbol_for
+from app.instruments import AssetClass, parse_instrument, provider_symbol_for
 from app.providers import build_providers
 from app.providers.base import ProviderError, ProviderErrorCode
 
@@ -129,16 +128,37 @@ class TestBinanceProvider:
                 self.cfg = cfg
 
             def load_markets(self):
-                return markets or {"BTC/USDT": {"precision": {"price": 0.01}, "limits": {"amount": {"min": 0.0001}}}}
+                return markets or {
+                    "BTC/USDT": {
+                        "precision": {"price": 0.01},
+                        "limits": {"amount": {"min": 0.0001}},
+                    }
+                }
 
             def fetch_ticker(self, sym):
-                return ticker or {"last": 63500.0, "bid": 63499.0, "ask": 63501.0, "percentage": 0.5, "timestamp": time.time() * 1000}
+                return ticker or {
+                    "last": 63500.0,
+                    "bid": 63499.0,
+                    "ask": 63501.0,
+                    "percentage": 0.5,
+                    "timestamp": time.time() * 1000,
+                }
 
             def fetch_ohlcv(self, sym, tf, limit=None):
                 if ohlcv is not None:
                     return ohlcv
                 now = int(time.time()) * 1000
-                return [[now - 300000 + 60000 * i, 63000.0 + i, 63010.0 + i, 62990.0 + i, 63005.0 + i, 10.0] for i in range(5)]
+                return [
+                    [
+                        now - 300000 + 60000 * i,
+                        63000.0 + i,
+                        63010.0 + i,
+                        62990.0 + i,
+                        63005.0 + i,
+                        10.0,
+                    ]
+                    for i in range(5)
+                ]
 
         monkeypatch.setattr("app.providers.binance.ccxt", types.SimpleNamespace(binance=Ex))
         from app.providers.binance import BinanceProvider
@@ -154,7 +174,12 @@ class TestBinanceProvider:
         assert c["symbol"] == "BTC/USDT"
         assert c["source"] == "binance"
         assert c["open_time"] < c["close_time"]
-        assert c["open"] == 63000.0 and c["high"] == 63010.0 and c["low"] == 62990.0 and c["close"] == 63005.0
+        assert (
+            c["open"] == 63000.0
+            and c["high"] == 63010.0
+            and c["low"] == 62990.0
+            and c["close"] == 63005.0
+        )
 
     def test_quote_shape(self, monkeypatch):
         p = self._fake_ccxt(monkeypatch)
@@ -191,7 +216,13 @@ class TestCoinGeckoProvider:
             monkeypatch,
             lambda m, u, p: _resp(
                 200,
-                {"prices": [[1786900000000, 100.0], [1786900060000, 101.0], [1786900120000, 102.0]]},
+                {
+                    "prices": [
+                        [1786900000000, 100.0],
+                        [1786900060000, 101.0],
+                        [1786900120000, 102.0],
+                    ]
+                },
             ),
         )
         from app.providers.coingecko import CoinGeckoProvider
@@ -225,8 +256,22 @@ class TestTwelveDataProvider:
                 200,
                 {
                     "values": [
-                        {"datetime": "2026-08-16 12:30:00", "open": "1.1500", "high": "1.1510", "low": "1.1490", "close": "1.1505", "volume": "100"},
-                        {"datetime": "2026-08-16 12:31:00", "open": "1.1505", "high": "1.1515", "low": "1.1495", "close": "1.1510", "volume": "120"},
+                        {
+                            "datetime": "2026-08-16 12:30:00",
+                            "open": "1.1500",
+                            "high": "1.1510",
+                            "low": "1.1490",
+                            "close": "1.1505",
+                            "volume": "100",
+                        },
+                        {
+                            "datetime": "2026-08-16 12:31:00",
+                            "open": "1.1505",
+                            "high": "1.1515",
+                            "low": "1.1495",
+                            "close": "1.1510",
+                            "volume": "120",
+                        },
                     ]
                 },
             ),
@@ -244,7 +289,10 @@ class TestTwelveDataProvider:
         assert TwelveDataProvider().api_key  # demo key always available
 
     def test_error_status(self, monkeypatch):
-        _set_throttled(monkeypatch, lambda m, u, p: _resp(200, {"status": "error", "message": "Invalid symbol"}))
+        _set_throttled(
+            monkeypatch,
+            lambda m, u, p: _resp(200, {"status": "error", "message": "Invalid symbol"}),
+        )
         from app.providers.twelve_data import TwelveDataProvider
 
         with pytest.raises(ProviderError) as ei:
@@ -287,7 +335,9 @@ class TestAlphaVantageProvider:
     def test_rate_limit_message(self, monkeypatch):
         _set_throttled(
             monkeypatch,
-            lambda m, u, p: _resp(200, {"Note": "API rate limit exceeded. Your API call frequency is restricted..."}),
+            lambda m, u, p: _resp(
+                200, {"Note": "API rate limit exceeded. Your API call frequency is restricted..."}
+            ),
         )
         from app.providers.alpha_vantage import AlphaVantageProvider
 
@@ -342,7 +392,14 @@ class TestAlpacaProvider:
                 200,
                 {
                     "bars": [
-                        {"t": "2026-08-16T12:30:00Z", "o": 100.0, "h": 101.0, "l": 99.5, "c": 100.5, "v": 1000},
+                        {
+                            "t": "2026-08-16T12:30:00Z",
+                            "o": 100.0,
+                            "h": 101.0,
+                            "l": 99.5,
+                            "c": 100.5,
+                            "v": 1000,
+                        },
                     ]
                 },
             ),
@@ -362,18 +419,34 @@ class TestAlpacaProvider:
 class TestProviderRegistry:
     def test_all_providers_build(self):
         ps = build_providers()
-        assert set(ps) == {"binance", "coingecko", "dhan", "upstox", "angel", "alpaca", "twelve_data", "alpha_vantage"}
+        assert set(ps) == {
+            "binance",
+            "coingecko",
+            "dhan",
+            "upstox",
+            "angel",
+            "alpaca",
+            "twelve_data",
+            "alpha_vantage",
+        }
 
     def test_health_never_contains_secrets(self):
         from app.providers import provider_states
 
-        for pid, h in provider_states().items():
+        for _pid, h in provider_states().items():
             blob = json_repr(h)
             assert "token" not in blob.lower() or "access" not in blob.lower()
             assert "secret" not in blob.lower()
             assert "api_key" not in blob.lower()
             assert h["state"] in (
-                "READY", "DEGRADED", "RATE_LIMITED", "AUTH_REQUIRED", "AUTH_FAILED", "OFFLINE", "DISABLED", "NOT_CONFIGURED"
+                "READY",
+                "DEGRADED",
+                "RATE_LIMITED",
+                "AUTH_REQUIRED",
+                "AUTH_FAILED",
+                "OFFLINE",
+                "DISABLED",
+                "NOT_CONFIGURED",
             )
 
 

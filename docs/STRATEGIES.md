@@ -52,3 +52,30 @@ live mean net PnL falls below 0.5× the backtest expectancy.
 - `GET /api/strategies/leaderboard` — ranked honest backtest metrics (60 s cache)
 - `POST /api/strategies/{id}/backtest` — run the honest backtester
 - `POST /api/research/{id}` — research dossier (see RESEARCH.md)
+
+## Class-based `StrategyRegistry` (alpha family)
+
+Separate from the declarative configs above: `app/strategies/base.py`
+`StrategyRegistry` + `@register_strategy` classes (`app/strategies/*/`).
+These are pure functions of OHLCV bars (+ perp `funding` when the provider
+annotates it); each carries a `parameter_schema`, warmup, family, and
+`generate_signal(bars, idx)` returning `Signal | None`. They are NOT yet
+wired into the legacy engine/backtest endpoints (which use dict configs).
+
+| family | strategy | idea | source |
+|---|---|---|---|
+| TREND | `punch_vol_managed_momentum` | smoothed ROC with inverse-vol sizing (Barroso-Santa-Clara) | J |
+| REVERSION | `punch_hurst_reversion` | Hurst H<0.5 gates mean reversion | K |
+| BREAKOUT | `punch_volume_flow` | CLV×volume flow + VWAP regime | L |
+| CARRY | `punch_trend_carry` | funding carry when APY ≥ gate, trend-only fallback | M |
+| ENSEMBLE | `punch_alpha_ensemble` | majority vote: volume-flow + vol-managed momentum + adaptive trend; `min_votes` (default 2), stop = avg of agreeing members | — |
+
+`punch_alpha_ensemble` accepts `use_flow` / `use_momentum` / `use_trend`
+switches; `Strategy.__init__` merges schema defaults for subclass params
+(parameters not in the schema are discarded).
+
+Honest live backtest results (real Binance OHLCV, 1000 bars, next-open
+fills, intrabar stops, 6 bps/side) are logged in CHANGELOG under
+[0.4.0] — the ensemble was net-positive on 3 of 4 jobs (best ETH/USDT 1h
++17%, PF 2.68); `trend_carry` abstained while funding APY stayed below its
+gate rather than emitting forced signals.

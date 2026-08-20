@@ -1,32 +1,32 @@
 """Tests for Carry Framework strategies."""
 
-import pytest
-
 from app.strategies.base import SignalDirection
-from app.strategies.carry.carry import CarryFramework, FXCarry, CryptoFundingCarry
+from app.strategies.carry.carry import CarryFramework, CryptoFundingCarry, FXCarry
 
 
 def _sample_carry_bars(n: int = 200, with_carry: bool = True) -> list[dict]:
     import numpy as np
-    rng = np.random.RandomState(42)
-    symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+
+    np.random.RandomState(42)
     bars = []
     base_rates = {"EURUSD": 0.02, "GBPUSD": 0.03, "USDJPY": -0.01, "AUDUSD": 0.04}
     for i in range(n):
-        ts = float(1700000000 + i * 86400)
+        float(1700000000 + i * 86400)
         for sym in ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]:
             carry = base_rates[sym] + np.random.normal(0, 0.001)
-            bars.append({
-                "ts": float(1700000000 + i * 86400),
-                "symbol": sym,
-                "open": 1.0,
-                "high": 1.001,
-                "low": 0.999,
-                "close": 1.0,
-                "volume": 1000000,
-                "carry": carry,
-                "carry_signal": 1 if carry > 0.01 else (-1 if carry < -0.01 else 0),
-            })
+            bars.append(
+                {
+                    "ts": float(1700000000 + i * 86400),
+                    "symbol": sym,
+                    "open": 1.0,
+                    "high": 1.001,
+                    "low": 0.999,
+                    "close": 1.0,
+                    "volume": 1000000,
+                    "carry": carry,
+                    "carry_signal": 1 if carry > 0.01 else (-1 if carry < -0.01 else 0),
+                }
+            )
     return bars
 
 
@@ -39,15 +39,37 @@ class TestCarryFramework:
         assert s.warmup_bars == 60
 
     def test_returns_none_before_warmup(self):
-        s = CarryFramework(universe=["EURUSD"])
-        bars = [{"ts": float(1700000000 + i * 86400), "symbol": "EURUSD", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1000} for i in range(30)]
+        CarryFramework(universe=["EURUSD"])
+        bars = [
+            {
+                "ts": float(1700000000 + i * 86400),
+                "symbol": "EURUSD",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1000,
+            }
+            for i in range(30)
+        ]
         for i in range(30):
             sig = CarryFramework(universe=["EURUSD"]).generate_signal(bars, i)
             assert sig is None
 
     def test_data_unavailable_without_carry_field(self):
         s = CarryFramework(universe=["EURUSD"], data_required=True)
-        bars = [{"ts": float(1700000000 + i * 86400), "symbol": "EURUSD", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1000} for i in range(100)]
+        bars = [
+            {
+                "ts": float(1700000000 + i * 86400),
+                "symbol": "EURUSD",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1000,
+            }
+            for i in range(100)
+        ]
         sig = s.generate_signal(bars, 99)
         assert sig is not None
         assert sig.direction == SignalDirection.FLAT

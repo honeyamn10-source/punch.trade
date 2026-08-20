@@ -18,6 +18,15 @@ A single-file SPA (vanilla JS, no build step).
 - **Risk** — mode / armed / consecutive losses / breaker / reconciliation
   gate / max positions; fixed-fractional sizing calculator; breaker reset
   (danger).
+- **Scenario Lab** (`data-page="scenario"`) — stress battery: scenario
+  catalog from `/api/stress/scenarios`, run your portfolio metrics through
+  `/api/stress/run` (pass/fail per scenario, worst drawdown), and a Monte
+  Carlo runner (`/api/v1/analysis/monte-carlo`) fed by a pasted returns
+  series (bootstrap expectancy, `real_edge` verdict, drawdown distribution).
+- **Risk Shield** (`data-page="risk"`) — live risk state (mode, armed
+  brokers, breaker, shield, consecutive losses), one-tap shield toggle
+  (`POST /api/risk/shield` — while on, every order is rejected with
+  `SHIELD_ACTIVE`), emergency stop, and breaker reset (danger).
 - **Strategies** — lifecycle ladder (status, score, reason, promotions) and
   the honest leaderboard (win rate, net %, max DD, sharpe, PF, trades).
 - **System** — SQLite storage (engine, WAL, schema, per-table counts),

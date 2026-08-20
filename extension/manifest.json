@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "punch.trade",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Signal overlay + one-tap bracket execution on your broker charts (Kite, Binance, demo).",
   "permissions": ["storage"],
   "host_permissions": [

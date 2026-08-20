@@ -3,6 +3,53 @@
 All notable changes, newest first. Versioned from `backend/app/version.py`
 (single source; API health exposes `version` + `gitCommit`).
 
+## [0.4.0] - 2026-08-19
+
+### Added
+- Alpha strategy family (`app/strategies/alpha/`) from live-market research
+  (time-series momentum, Barroso-Santa-Clara vol management, Hurst gating,
+  volume-flow, funding carry — families J/M/ENSEMBLE, ~24 classes total):
+  `punch_vol_managed_momentum`, `punch_hurst_reversion`, `punch_volume_flow`,
+  `punch_trend_carry`, and `punch_alpha_ensemble` (majority-vote of
+  volume-flow + vol-managed momentum + adaptive trend with min-votes gate).
+  All OHLCV-only; `trend_carry` reads perp `funding` when present and falls
+  back honestly to trend-only otherwise.
+- Binance perp funding enrichment in `app/providers/binance.py`: candles
+  carry a `funding` field (most recent settlement at/before bar open, 120 s
+  cache, silent fallback on fapi failure).
+- Risk Shield (`app/risk.py`): `shield_on()`/`set_shield()` + gate — while
+  engaged, every order is rejected with `SHIELD_ACTIVE` (409). Surfaced in
+  `GET /api/risk/shield`, toggled via `POST /api/risk/shield {"on": bool}`,
+  and in risk status as `shieldOn`.
+- Stress Lab endpoints: `GET /api/stress/scenarios` (17 named scenarios)
+  and `POST /api/stress/run` (metrics → pass/fail battery + worst drawdown).
+- Monte Carlo endpoint `POST /api/v1/analysis/monte-carlo` (bootstrap
+  expectancy + equity/distribution analysis, `real_edge` gate).
+- Dashboard: Scenario Lab page (stress battery + Monte Carlo runner) and
+  Risk Shield page (shield toggle, emergency stop, breaker reset, risk
+  state) — `data-page="scenario"` / `data-page="risk"` in
+  `backend/static/dashboard.html`, routed in `app.js`.
+- Tests: funding annotation, alpha ensemble voting/abstention, shield gate +
+  order rejection, stress/Monte-Carlo API contract (14 new; suite 437 total).
+
+### Changed
+- `docs/STRATEGIES.md` documents the class-based `StrategyRegistry` surface
+  and the alpha family; `docs/DASHBOARD.md` covers the two new pages;
+  `docs/API.md` lists the new endpoints and the `funding` bar field;
+  `docs/RISK.md` documents the shield.
+- Version 0.3.0 → 0.4.0 (`app/version.py`, `pyproject.toml`,
+  `extension/manifest.json` — manifest was stale at 0.2.0, now synced).
+
+### Honest live backtests (real Binance OHLCV, 1000 bars, next-open fills,
+intrabar stops, 6 bps/side costs)
+- `punch_alpha_ensemble`: ETH/USDT 1h +17% (PF 2.68), ETH/USDT 4h +11%
+  (PF 1.26), BTC/USDT 4h +4% (PF 1.13), BTC/USDT 1h -2% (PF 1.02).
+- `punch_volume_flow`: ETH 1h +16% (PF 4.0), ETH 4h +11% (PF 1.29),
+  BTC 4h +10% (PF 1.36).
+- `punch_adaptive_trend`: profitable on all four jobs (+2%…+11%).
+- `punch_trend_carry` stayed mostly flat — BTC perp funding APY is below
+  the 20% gate; the strategy abstains rather than fabricating signals.
+
 ## [0.3.0] — 2026-08-16
 
 ### Added

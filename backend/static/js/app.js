@@ -223,6 +223,7 @@
         'radar': 'EDGE RADAR',
         'forge': 'STRATEGY FORGE',
         'lab': 'STRATEGY LAB',
+        'scenario': 'SCENARIO LAB',
         'battle': 'BATTLEBOARD',
         'portfolio': 'PORTFOLIO X-RAY',
         'paper': 'PAPER INCUBATOR',
@@ -274,6 +275,12 @@
         },
         'lab': {
           loader: () => Promise.resolve(window.StrategyLabPage)
+        },
+        'scenario': {
+          loader: () => Promise.resolve(window.ScenarioLabPage)
+        },
+        'risk': {
+          loader: () => Promise.resolve(window.RiskShieldPage)
         },
         'signals': {
           html: `

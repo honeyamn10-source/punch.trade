@@ -1,23 +1,24 @@
 """Tests for portfolio_brain."""
 
+import math
+
 import numpy as np
-import pytest
 
 from app.portfolio_brain import (
+    AllocationConfig,
+    RegimeConfig,
+    RegimeState,
+    allocate_equal,
     allocate_hrp,
     allocate_minvar,
-    allocate_risk_parity,
-    allocate_equal,
     allocate_portfolio,
+    allocate_risk_parity,
     detect_regime_hmm,
     detect_regime_vol_clustering,
-    kelly_weights,
-    fractional_kelly,
     factor_exposure,
+    fractional_kelly,
+    kelly_weights,
     regime_aware_allocation,
-    RegimeConfig,
-    AllocationConfig,
-    RegimeState,
 )
 
 
@@ -27,7 +28,9 @@ def _sample_returns(n_assets: int = 5, n_bars: int = 500, seed: int = 42) -> np.
     true_corr = rng.randn(n_assets, n_assets)
     true_corr = true_corr @ true_corr.T
     true_corr = true_corr / np.sqrt(np.outer(np.diag(true_corr), np.diag(true_corr)))
-    true_cov = true_corr * np.outer(rng.uniform(0.01, 0.05, n_assets), rng.uniform(0.01, 0.05, n_assets))
+    true_cov = true_corr * np.outer(
+        rng.uniform(0.01, 0.05, n_assets), rng.uniform(0.01, 0.05, n_assets)
+    )
     returns = rng.multivariate_normal(np.zeros(n_assets), true_cov, size=n_bars)
     return returns
 
@@ -84,7 +87,7 @@ class TestAllocation:
     def test_kelly_fraction_blending(self):
         returns = _sample_returns(5, 500)
         mu = np.mean(returns, axis=0) * 252
-        cov = np.cov(returns.T)
+        np.cov(returns.T)
         cfg = AllocationConfig(method="minvar", kelly_fraction=0.5)
         w = allocate_portfolio(returns, cfg, expected_returns=mu)
         assert len(w) == 5
@@ -162,6 +165,3 @@ class TestRegimeAwareAllocation:
         w_trend = regime_aware_allocation(returns, trend_regime, cfg)
         # Trending regime increases kelly fraction
         assert np.sum(np.abs(w_trend)) >= np.sum(np.abs(w_normal)) - 1e-6
-
-
-import math

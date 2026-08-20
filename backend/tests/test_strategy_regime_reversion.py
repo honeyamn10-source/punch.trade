@@ -1,13 +1,12 @@
 """Tests for Regime-Conditioned Mean Reversion strategy."""
 
-import pytest
-
 from app.strategies.base import SignalDirection
 from app.strategies.reversion.regime_reversion import RegimeConditionedMeanReversion
 
 
 def _sample_bars(n: int = 300, regime: str = "range", seed: int = 42) -> list[dict]:
     import numpy as np
+
     rng = np.random.RandomState(seed)
     base = 100.0
     bars = []
@@ -24,17 +23,19 @@ def _sample_bars(n: int = 300, regime: str = "range", seed: int = 42) -> list[di
         else:
             drift = rng.normal(0, 0.01)
 
-        base *= (1 + drift)
+        base *= 1 + drift
         base = max(50, min(200, base))  # Keep in reasonable range
-        bars.append({
-            "ts": float(1700000000 + i * 300),
-            "symbol": "BTC/USDT",
-            "open": base * (1 + rng.normal(0, 0.001)),
-            "high": base * (1 + abs(rng.normal(0, 0.002))),
-            "low": base * (1 - abs(rng.normal(0, 0.002))),
-            "close": base,
-            "volume": float(rng.lognormal(10, 0.5)),
-        })
+        bars.append(
+            {
+                "ts": float(1700000000 + i * 300),
+                "symbol": "BTC/USDT",
+                "open": base * (1 + rng.normal(0, 0.001)),
+                "high": base * (1 + abs(rng.normal(0, 0.002))),
+                "low": base * (1 - abs(rng.normal(0, 0.002))),
+                "close": base,
+                "volume": float(rng.lognormal(10, 0.5)),
+            }
+        )
     return bars
 
 

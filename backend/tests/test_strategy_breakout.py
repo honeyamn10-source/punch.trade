@@ -1,10 +1,7 @@
 """Tests for Volatility Breakout and ORB strategies - simplified."""
 
-import pytest
-
-from app.strategies.base import SignalDirection
-from app.strategies.breakout.volatility_breakout import VolatilityBreakout
 from app.strategies.breakout.orb import OpeningRangeBreakout
+from app.strategies.breakout.volatility_breakout import VolatilityBreakout
 
 
 class TestVolatilityBreakout:
@@ -16,9 +13,20 @@ class TestVolatilityBreakout:
         assert s.warmup_bars == 100
 
     def test_returns_none_before_warmup(self):
-        s = VolatilityBreakout()
+        VolatilityBreakout()
         # Create minimal bars
-        bars = [{"ts": float(1700000000 + i * 300), "symbol": "BTC/USDT", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1000} for i in range(50)]
+        bars = [
+            {
+                "ts": float(1700000000 + i * 300),
+                "symbol": "BTC/USDT",
+                "open": 100,
+                "high": 101,
+                "low": 99,
+                "close": 100,
+                "volume": 1000,
+            }
+            for i in range(50)
+        ]
         for i in range(50):
             sig = VolatilityBreakout().generate_signal(bars, i)
             assert sig is None
@@ -39,7 +47,18 @@ class TestOpeningRangeBreakout:
 
     def test_returns_none_before_warmup(self):
         s = OpeningRangeBreakout()
-        bars = [{"ts": float(1700000000 + i * 300), "symbol": "SPY", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1000} for i in range(30)]
+        bars = [
+            {
+                "ts": float(1700000000 + i * 300),
+                "symbol": "SPY",
+                "open": 100,
+                "high": 101,
+                "low": 99,
+                "close": 100,
+                "volume": 1000,
+            }
+            for i in range(30)
+        ]
         for i in range(30):
             sig = s.generate_signal(bars, i)
             assert sig is None

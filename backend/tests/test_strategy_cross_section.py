@@ -1,7 +1,5 @@
 """Tests for Cross-Sectional Momentum strategy."""
 
-import pytest
-
 from app.strategies.base import SignalDirection
 from app.strategies.cross_section.momentum import CrossSectionalMomentum
 
@@ -9,13 +7,14 @@ from app.strategies.cross_section.momentum import CrossSectionalMomentum
 def _sample_cross_section_bars(n: int = 500, seed: int = 42) -> list[dict]:
     """Generate multi-symbol bars with different momentum profiles."""
     import numpy as np
+
     rng = np.random.RandomState(seed)
     symbols = ["SPY", "QQQ", "IWM", "EFA", "EEM", "GLD", "TLT"]
     bars = []
     base_prices = {s: 100.0 for s in ["SPY", "QQQ", "IWM", "EFA", "EEM", "GLD", "TLT"]}
-    
+
     for i in range(n):
-        ts = float(1700000000 + i * 86400)
+        float(1700000000 + i * 86400)
         for sym in symbols:
             # Different momentum profiles
             if sym == "SPY":
@@ -32,20 +31,22 @@ def _sample_cross_section_bars(n: int = 500, seed: int = 42) -> list[dict]:
                 drift, vol = 0.0001, 0.012
             else:  # TLT
                 drift, vol = -0.0001, 0.008
-            
+
             ret = rng.normal(drift, vol)
-            base_prices[sym] *= (1 + ret)
+            base_prices[sym] *= 1 + ret
             base_prices[sym] = max(20, min(500, base_prices[sym]))
-            
-            bars.append({
-                "ts": float(1700000000 + i * 86400),
-                "symbol": sym,
-                "open": base_prices[sym],
-                "high": base_prices[sym] * 1.001,
-                "low": base_prices[sym] * 0.999,
-                "close": base_prices[sym],
-                "volume": float(1000000),
-            })
+
+            bars.append(
+                {
+                    "ts": float(1700000000 + i * 86400),
+                    "symbol": sym,
+                    "open": base_prices[sym],
+                    "high": base_prices[sym] * 1.001,
+                    "low": base_prices[sym] * 0.999,
+                    "close": base_prices[sym],
+                    "volume": float(1000000),
+                }
+            )
     return bars
 
 
@@ -58,9 +59,33 @@ class TestCrossSectionalMomentum:
         assert s.warmup_bars == 252
 
     def test_returns_none_before_warmup(self):
-        s = CrossSectionalMomentum(universe=["SPY", "QQQ"])
-        bars = [{"ts": float(1700000000 + i * 86400), "symbol": "SPY", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1000000} for i in range(100)]
-        bars.extend([{"ts": float(1700000000 + i * 86400), "symbol": "QQQ", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 500000} for i in range(100)])
+        CrossSectionalMomentum(universe=["SPY", "QQQ"])
+        bars = [
+            {
+                "ts": float(1700000000 + i * 86400),
+                "symbol": "SPY",
+                "open": 100,
+                "high": 101,
+                "low": 99,
+                "close": 100,
+                "volume": 1000000,
+            }
+            for i in range(100)
+        ]
+        bars.extend(
+            [
+                {
+                    "ts": float(1700000000 + i * 86400),
+                    "symbol": "QQQ",
+                    "open": 100,
+                    "high": 101,
+                    "low": 99,
+                    "close": 100,
+                    "volume": 500000,
+                }
+                for i in range(100)
+            ]
+        )
         for i in range(100):
             sig = CrossSectionalMomentum(universe=["SPY", "QQQ"]).generate_signal(bars, i)
             assert sig is None
@@ -140,6 +165,6 @@ class TestCrossSectionalMomentum:
             skip_recent=True,
         )
         bars = _sample_cross_section_bars(300)
-        sig = s.generate_signal(bars, 252)
+        s.generate_signal(bars, 252)
         # Should not crash
         assert True

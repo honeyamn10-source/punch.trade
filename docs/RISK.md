@@ -16,6 +16,10 @@ stable for clients, `detail.message` is human-readable.
 - Arm: `POST /api/system/arm {"broker": "kite"}` — LIVE mode only, broker
   must be connected. Arming is **never persisted**: restart → disarmed.
 - Emergency stop: `POST /api/system/stop` → research mode + disarm all.
+- Risk Shield: `POST /api/risk/shield {"on": true}` engages a hard gate —
+  every order is rejected with `SHIELD_ACTIVE` (409) regardless of mode,
+  until lifted. State is process-local (not persisted) and is exposed as
+  `shieldOn` in risk status and `GET /api/risk/shield`.
 - Tripwire: LIVE mode is refused while `PUNCH_TOKEN` is the demo token.
 
 ## Pre-trade checklist (order of evaluation)

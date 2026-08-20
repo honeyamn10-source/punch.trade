@@ -35,7 +35,7 @@ the relevant one before touching a subsystem).
 
 ## Versioning
 
-`backend/app/version.py` is the single version source (currently 0.3.0).
+`backend/app/version.py` is the single version source (currently 0.4.0).
 On a release bump it too: `pyproject.toml [project] version` and
 `extension/manifest.json` version.
 

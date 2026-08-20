@@ -492,13 +492,320 @@ class StrategyLabPage extends PageComponent {
 }
 
 // ============================================================
+// Scenario Lab Page
+// ============================================================
+
+class ScenarioLabPage extends PageComponent {
+  render() {
+    return `
+      <div class="scenario-lab">
+        <div class="page-header">
+          <h2>Scenario Lab</h2>
+          <div class="toolbar">
+            <button id="loadScenarios" class="btn">Refresh Scenarios</button>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="panel">
+            <div class="panel-header"><h3 class="panel-title">Stress Scenarios</h3></div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr><th>Scenario</th><th>Type</th><th>Severity</th><th>P(occur)</th></tr>
+                </thead>
+                <tbody id="scenarioList"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><h3 class="panel-title">Stress Run — Strategy Metrics</h3></div>
+            <div class="form-inline">
+              <label>Net Return %</label>
+              <input id="mNetReturn" type="number" step="0.1" value="10" />
+              <label>Max DD %</label>
+              <input id="mMaxDd" type="number" step="0.1" value="15" />
+              <label>Sharpe</label>
+              <input id="mSharpe" type="number" step="0.1" value="1.0" />
+              <label>Cost bps</label>
+              <input id="mCostBps" type="number" step="0.1" value="12" />
+            </div>
+            <div class="form-inline">
+              <label>Volatility</label>
+              <input id="mVol" type="number" step="0.1" value="30" />
+              <label>Win Rate %</label>
+              <input id="mWinRate" type="number" step="0.1" value="45" />
+              <button id="runStress" class="btn btn-primary">Run Stress Battery</button>
+            </div>
+            <div id="stressReport" class="analysis" style="margin-top: 12px;">—</div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="panel">
+            <div class="panel-header"><h3 class="panel-title">Monte Carlo — Returns Input</h3></div>
+            <div class="form-inline">
+              <textarea id="mcReturns" rows="4" class="form-input mono" placeholder="comma-separated per-trade returns, e.g. 0.02,-0.01,0.015,..."></textarea>
+            </div>
+            <div class="form-inline">
+              <button id="runMonteCarlo" class="btn btn-primary">Run Monte Carlo</button>
+            </div>
+            <div id="mcReport" class="analysis" style="margin-top: 12px;">—</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async onInit() {
+    await this._loadScenarios();
+    document.getElementById('loadScenarios')?.addEventListener('click', () => this._loadScenarios());
+    document.getElementById('runStress')?.addEventListener('click', () => this._runStress());
+    document.getElementById('runMonteCarlo')?.addEventListener('click', () => this._runMonteCarlo());
+  }
+
+  async _loadScenarios() {
+    try {
+      const response = await api.get('/api/stress/scenarios');
+      const tbody = document.getElementById('scenarioList');
+      const scenarios = response.scenarios || [];
+      tbody.innerHTML = scenarios.map(s => `
+        <tr>
+          <td>${fmt.escape(s.name)}</td>
+          <td class="mono">${fmt.escape(s.type)}</td>
+          <td>${fmt.escape(s.severity)}</td>
+          <td>${(s.probability * 100).toFixed(3)}%</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="muted">No scenarios</td></tr>';
+    } catch (error) {
+      console.error('Failed to load scenarios:', error);
+    }
+  }
+
+  _num(id) {
+    const v = parseFloat(document.getElementById(id)?.value);
+    return Number.isFinite(v) ? v : 0;
+  }
+
+  async _runStress() {
+    const btn = document.getElementById('runStress');
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+    try {
+      const metrics = {
+        net_return: this._num('mNetReturn') / 100,
+        max_drawdown_pct: this._num('mMaxDd'),
+        sharpe: this._num('mSharpe'),
+        cost_bps: this._num('mCostBps'),
+        volatility: this._num('mVol'),
+        win_rate: this._num('mWinRate') / 100
+      };
+      const response = await api.post('/api/stress/run', { metrics });
+      this._renderStressReport(response);
+    } catch (error) {
+      console.error('Stress run failed:', error);
+      document.getElementById('stressReport').textContent = 'Stress run failed: ' + error.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Run Stress Battery';
+    }
+  }
+
+  _renderStressReport(report) {
+    if (!report) return;
+    const rows = (report.scenarios || []).map(s => `
+      <tr>
+        <td>${fmt.escape(s.name)}</td>
+        <td class="mono">${fmt.escape(s.type)}</td>
+        <td><span class="chip ${s.passed ? 'ok' : 'danger'}">${s.passed ? 'PASS' : 'FAIL'}</span></td>
+        <td>${fmt.escape(s.notes)}</td>
+      </tr>
+    `).join('');
+    document.getElementById('stressReport').innerHTML = `
+      <strong>Stress Report:</strong> ${report.passed}/${report.total_scenarios} pass
+      (rate ${(report.pass_rate * 100).toFixed(0)}%)
+      <span class="muted"> | worst DD ${report.worst_max_drawdown_pct.toFixed(1)}% |
+      worst Sharpe ${report.worst_sharpe.toFixed(2)} |
+      worst return ${(report.worst_net_return * 100).toFixed(1)}%</span>
+      <table class="table" style="margin-top: 8px;">
+        <thead><tr><th>Scenario</th><th>Type</th><th>Result</th><th>Notes</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  async _runMonteCarlo() {
+    const btn = document.getElementById('runMonteCarlo');
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+    try {
+      const raw = document.getElementById('mcReturns')?.value || '';
+      const returns = raw.split(',').map(s => parseFloat(s.trim())).filter(Number.isFinite);
+      if (returns.length < 10) {
+        document.getElementById('mcReport').textContent = 'Need >= 10 returns';
+        return;
+      }
+      const response = await api.post('/api/v1/analysis/monte-carlo', { returns, iterations: 500 });
+      const a = response.analysis || {};
+      const e = response.expectancy || {};
+      document.getElementById('mcReport').innerHTML = `
+        <strong>Ending Equity</strong> mean ${fmt.price(a.ending_equity?.mean)} |
+        median ${fmt.price(a.ending_equity?.median)} |
+        p5 ${fmt.price(a.ending_equity?.p5)} |
+        p95 ${fmt.price(a.ending_equity?.p95)}
+        <br/><strong>Max DD</strong> mean ${(a.max_drawdown?.mean || 0).toFixed(1)}% |
+        P(DD>20%) ${((a.max_drawdown?.prob_over_20pct || 0) * 100).toFixed(0)}%
+        <br/><strong>Expectancy</strong> p50 ${fmt.percent(e.expectancy_p50)} |
+        prob positive ${fmt.percent(e.prob_positive)}
+      `;
+    } catch (error) {
+      console.error('Monte Carlo failed:', error);
+      document.getElementById('mcReport').textContent = 'Monte Carlo failed: ' + error.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Run Monte Carlo';
+    }
+  }
+}
+
+// ============================================================
+// Risk Shield Page
+// ============================================================
+
+class RiskShieldPage extends PageComponent {
+  render() {
+    return `
+      <div class="risk-shield">
+        <div class="page-header">
+          <h2>Risk Shield</h2>
+          <div class="toolbar">
+            <button id="refreshRisk" class="btn">Refresh</button>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="riskStats"></div>
+
+        <div class="grid2">
+          <div class="panel">
+            <div class="panel-header"><h3 class="panel-title">Shield Controls</h3></div>
+            <div class="form-inline">
+              <button id="toggleShield" class="btn btn-primary">Engage Shield</button>
+              <button id="emergencyStop" class="btn btn-danger">Emergency Stop</button>
+              <button id="resetBreaker" class="btn">Reset Breaker</button>
+            </div>
+            <div id="shieldStatus" class="analysis" style="margin-top: 12px;">—</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><h3 class="panel-title">Position Limits</h3></div>
+            <div class="table-container">
+              <table class="table">
+                <tbody id="limitsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async onInit() {
+    await this._loadRisk();
+    document.getElementById('refreshRisk')?.addEventListener('click', () => this._loadRisk());
+    document.getElementById('toggleShield')?.addEventListener('click', () => this._toggleShield());
+    document.getElementById('emergencyStop')?.addEventListener('click', () => this._emergencyStop());
+    document.getElementById('resetBreaker')?.addEventListener('click', () => this._resetBreaker());
+  }
+
+  async _loadRisk() {
+    try {
+      const [stateRes, shieldRes] = await Promise.all([
+        api.get('/api/risk/state'),
+        api.get('/api/risk/shield')
+      ]);
+      this._renderState(stateRes, shieldRes);
+    } catch (error) {
+      console.error('Failed to load risk state:', error);
+    }
+  }
+
+  _renderState(state, shield) {
+    const container = document.getElementById('riskStats');
+    const chips = [
+      { label: 'Mode', value: state.mode, cls: state.mode === 'live' ? 'danger' : 'info' },
+      { label: 'Shield', value: shield.shieldOn ? 'ENGAGED' : 'OFF', cls: shield.shieldOn ? 'danger' : 'ok' },
+      { label: 'Breaker', value: state.breakerOpen ? 'OPEN' : 'OK', cls: state.breakerOpen ? 'danger' : 'ok' },
+      { label: 'Consecutive Losses', value: state.consecutiveLosses, cls: 'muted' },
+      { label: 'Reconciliation', value: state.reconciliationOk ? 'OK' : 'MISMATCH', cls: state.reconciliationOk ? 'ok' : 'danger' },
+      { label: 'Armed Brokers', value: (state.armed || []).join(', ') || 'none', cls: 'muted' }
+    ];
+    container.innerHTML = chips.map(c => `
+      <div class="stat-card">
+        <div class="stat-label">${fmt.escape(c.label)}</div>
+        <div class="stat-value"><span class="chip ${c.cls}">${fmt.escape(c.value)}</span></div>
+      </div>
+    `).join('');
+
+    const limits = [
+      ['Max Open Positions', state.maxPositions],
+      ['Max Qty', state.maxQty],
+      ['Max Daily Loss %', state.maxDailyLossPct],
+      ['Risk per Trade %', state.riskPerTradePct],
+      ['Circuit Breaker Losses', state.circuitBreakerLosses]
+    ];
+    document.getElementById('limitsTable').innerHTML = limits.map(([k, v]) => `
+      <tr><td>${fmt.escape(k)}</td><td class="mono">${fmt.escape(v)}</td></tr>
+    `).join('');
+
+    const btn = document.getElementById('toggleShield');
+    btn.textContent = shield.shieldOn ? 'Lift Shield' : 'Engage Shield';
+    btn.classList.toggle('btn-danger', shield.shieldOn);
+    btn.classList.toggle('btn-primary', !shield.shieldOn);
+    document.getElementById('shieldStatus').textContent = shield.shieldOn
+      ? 'Shield ENGAGED — all new orders are blocked until lifted.'
+      : 'Shield off — normal risk rules apply (breaker, daily loss, position limits).';
+  }
+
+  async _toggleShield() {
+    try {
+      const res = await api.get('/api/risk/shield');
+      const next = !res.shieldOn;
+      await api.post('/api/risk/shield', { on: next });
+      await this._loadRisk();
+    } catch (error) {
+      console.error('Shield toggle failed:', error);
+    }
+  }
+
+  async _emergencyStop() {
+    try {
+      await api.post('/api/system/stop');
+      await this._loadRisk();
+    } catch (error) {
+      console.error('Emergency stop failed:', error);
+    }
+  }
+
+  async _resetBreaker() {
+    try {
+      await api.post('/api/risk/breaker/reset');
+      await this._loadRisk();
+    } catch (error) {
+      console.error('Breaker reset failed:', error);
+    }
+  }
+}
+
+// ============================================================
 // Page Registry
 // ============================================================
 
 const Pages = {
   'nexus-home': NexusHomePage,
   'strategy-lab': StrategyLabPage,
-  // Add more pages as needed
+  'scenario-lab': ScenarioLabPage,
+  'risk-shield': RiskShieldPage,
 };
 
 function createPage(pageName, container, options) {
@@ -513,11 +820,13 @@ function createPage(pageName, container, options) {
 
 // Export for modules
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { PageComponent, NexusHomePage, StrategyLabPage, Pages, createPage };
+  module.exports = { PageComponent, NexusHomePage, StrategyLabPage, ScenarioLabPage, RiskShieldPage, Pages, createPage };
 } else {
   window.PageComponent = PageComponent;
   window.NexusHomePage = NexusHomePage;
   window.StrategyLabPage = StrategyLabPage;
+  window.ScenarioLabPage = ScenarioLabPage;
+  window.RiskShieldPage = RiskShieldPage;
   window.Pages = Pages;
   window.createPage = createPage;
 }

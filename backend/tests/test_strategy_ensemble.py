@@ -1,30 +1,30 @@
 """Tests for Adaptive Ensemble strategy."""
 
-import pytest
-
-from app.strategies.base import SignalDirection
 from app.strategies.ensemble.adaptive import AdaptiveEnsemble
 
 
 def _sample_ensemble_bars(n: int = 300, seed: int = 42) -> list[dict]:
     import numpy as np
+
     rng = np.random.RandomState(seed)
     symbols = ["SPY", "QQQ", "IWM", "EFA", "GLD"]
     bars = []
     for i in range(n):
-        ts = float(1700000000 + i * 86400)
+        float(1700000000 + i * 86400)
         for sym in symbols:
-            drift = rng.normal(0.0003, 0.01)
+            rng.normal(0.0003, 0.01)
             base = 100.0
-            bars.append({
-                "ts": float(1700000000 + i * 86400),
-                "symbol": sym,
-                "open": base * (1 + np.random.normal(0, 0.001)),
-                "high": base * (1 + abs(np.random.normal(0, 0.002))),
-                "low": base * (1 - abs(np.random.normal(0, 0.002))),
-                "close": base,
-                "volume": 1000000,
-            })
+            bars.append(
+                {
+                    "ts": float(1700000000 + i * 86400),
+                    "symbol": sym,
+                    "open": base * (1 + np.random.normal(0, 0.001)),
+                    "high": base * (1 + abs(np.random.normal(0, 0.002))),
+                    "low": base * (1 - abs(np.random.normal(0, 0.002))),
+                    "close": base,
+                    "volume": 1000000,
+                }
+            )
     return bars
 
 
@@ -37,8 +37,19 @@ class TestAdaptiveEnsemble:
         assert s.warmup_bars == 252
 
     def test_returns_none_before_warmup(self):
-        s = AdaptiveEnsemble()
-        bars = [{"ts": float(1700000000 + i * 86400), "symbol": "SPY", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1000000} for i in range(100)]
+        AdaptiveEnsemble()
+        bars = [
+            {
+                "ts": float(1700000000 + i * 86400),
+                "symbol": "SPY",
+                "open": 100,
+                "high": 101,
+                "low": 99,
+                "close": 100,
+                "volume": 1000000,
+            }
+            for i in range(100)
+        ]
         for i in range(100):
             sig = AdaptiveEnsemble().generate_signal(bars, i)
             assert sig is None

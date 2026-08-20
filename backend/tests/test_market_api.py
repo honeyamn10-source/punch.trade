@@ -5,9 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api as api
+from app.instruments import AssetClass
 from app.market_router import MarketRouter
 from app.providers.base import HealthState, MarketDataProvider
-from app.instruments import AssetClass
 
 H = {"X-Punch-Token": "punch-demo-token"}
 
@@ -15,7 +15,16 @@ H = {"X-Punch-Token": "punch-demo-token"}
 class StubProvider(MarketDataProvider):
     provider_id = "stub"
     display_name = "Stub"
-    asset_classes = (AssetClass.CRYPTO, AssetClass.FOREX, AssetClass.EQUITY, AssetClass.ETF, AssetClass.INDEX, AssetClass.FUTURE, AssetClass.OPTION, AssetClass.COMMODITY)
+    asset_classes = (
+        AssetClass.CRYPTO,
+        AssetClass.FOREX,
+        AssetClass.EQUITY,
+        AssetClass.ETF,
+        AssetClass.INDEX,
+        AssetClass.FUTURE,
+        AssetClass.OPTION,
+        AssetClass.COMMODITY,
+    )
     state = HealthState.READY
 
     def health(self):
@@ -31,10 +40,31 @@ class StubProvider(MarketDataProvider):
         return {"symbol": instrument.symbol, "provider": "stub"}
 
     def get_quote(self, instrument):
-        return {"symbol": instrument.symbol, "price": 63000.0, "bid": 62999.0, "ask": 63001.0, "ts": 0, "source": "stub"}
+        return {
+            "symbol": instrument.symbol,
+            "price": 63000.0,
+            "bid": 62999.0,
+            "ask": 63001.0,
+            "ts": 0,
+            "source": "stub",
+        }
 
     def get_candles(self, instrument, timeframe, *, start=None, end=None, limit=None):
-        return [{"symbol": instrument.symbol, "timeframe": timeframe, "open_time": 0, "close_time": 60, "open": 1, "high": 2, "low": 1, "close": 2, "volume": 10, "closed": True, "source": "stub"}]
+        return [
+            {
+                "symbol": instrument.symbol,
+                "timeframe": timeframe,
+                "open_time": 0,
+                "close_time": 60,
+                "open": 1,
+                "high": 2,
+                "low": 1,
+                "close": 2,
+                "volume": 10,
+                "closed": True,
+                "source": "stub",
+            }
+        ]
 
 
 @pytest.fixture
@@ -66,7 +96,11 @@ class TestEndpoints:
         assert r.json()["results"][0]["symbol"] == "BTC/USDT"
 
     def test_instrument_parse(self, client):
-        r = client.get("/api/v1/market/instruments", params={"symbol": "NFO:NIFTY-2026-08-27-25000-CE"}, headers=H)
+        r = client.get(
+            "/api/v1/market/instruments",
+            params={"symbol": "NFO:NIFTY-2026-08-27-25000-CE"},
+            headers=H,
+        )
         assert r.status_code == 200
         assert r.json()["instrument"]["asset_class"] == "OPTION"
 
@@ -76,12 +110,16 @@ class TestEndpoints:
         assert r.json()["price"] == 63000.0
 
     def test_candles(self, client):
-        r = client.get("/api/v1/market/candles", params={"symbol": "BTC/USDT", "interval": "5m"}, headers=H)
+        r = client.get(
+            "/api/v1/market/candles", params={"symbol": "BTC/USDT", "interval": "5m"}, headers=H
+        )
         assert r.status_code == 200
         assert r.json()["bars"][0]["source"] == "stub"
 
     def test_candles_bad_timeframe(self, client):
-        r = client.get("/api/v1/market/candles", params={"symbol": "BTC/USDT", "interval": "9x"}, headers=H)
+        r = client.get(
+            "/api/v1/market/candles", params={"symbol": "BTC/USDT", "interval": "9x"}, headers=H
+        )
         assert r.status_code == 502
         body = r.json()
         assert body["error"]["code"] == "TIMEFRAME_UNSUPPORTED"

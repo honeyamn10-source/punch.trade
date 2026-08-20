@@ -1,12 +1,8 @@
 """Tests for strategy_health engine."""
 
-import pytest
-
 from app.strategy_health import (
     assess_strategy_health,
     format_assessment,
-    HealthConfig,
-    DEFAULT_CONFIG,
 )
 
 
@@ -26,11 +22,33 @@ def _mock_research_report(
     return {
         "qualityGate": {"passed": True, "score": 85},
         "splits": {
-            "train": {"trades": 100, "net_pnl": 500, "sharpe": 1.5, "sortino": 2.0, "max_drawdown_pct": -5.0},
-            "val": {"trades": val_trades, "net_pnl": val_net, "sharpe": 1.0, "sortino": 1.3, "max_drawdown_pct": -4.0},
-            "test": {"trades": oos_trades, "net_pnl": oos_net, "sharpe": test_sharpe, "sortino": test_sortino, "max_drawdown_pct": -test_max_dd},
+            "train": {
+                "trades": 100,
+                "net_pnl": 500,
+                "sharpe": 1.5,
+                "sortino": 2.0,
+                "max_drawdown_pct": -5.0,
+            },
+            "val": {
+                "trades": val_trades,
+                "net_pnl": val_net,
+                "sharpe": 1.0,
+                "sortino": 1.3,
+                "max_drawdown_pct": -4.0,
+            },
+            "test": {
+                "trades": oos_trades,
+                "net_pnl": oos_net,
+                "sharpe": test_sharpe,
+                "sortino": test_sortino,
+                "max_drawdown_pct": -test_max_dd,
+            },
         },
-        "walkForward": {"consistency": wf_consistency, "profitableWindows": int(wf_windows * wf_consistency), "totalWindows": wf_windows},
+        "walkForward": {
+            "consistency": wf_consistency,
+            "profitableWindows": int(wf_windows * wf_consistency),
+            "totalWindows": wf_windows,
+        },
         "parameterStability": {"spread": param_spread, "stable": param_spread < 1.5, "base": {}},
         "bootstrap": {"probPositive": bootstrap_prob, "realEdge": bootstrap_prob >= 0.6},
         "sample": {"tradesTrain": 100, "tradesVal": val_trades, "tradesTest": oos_trades},
@@ -62,7 +80,9 @@ class TestStrategyHealth:
 
     def test_pbo_warning(self):
         # Many trials with poor PBO
-        trial_history = [{"sharpe": 1.0, "train_sharpe": 1.2, "test_sharpe": 0.5} for _ in range(15)]
+        trial_history = [
+            {"sharpe": 1.0, "train_sharpe": 1.2, "test_sharpe": 0.5} for _ in range(15)
+        ]
         report = _mock_research_report()
         assessment = assess_strategy_health("test", "1.0.0", report, trial_history=trial_history)
         assert assessment.pbo_prob is not None
@@ -79,7 +99,11 @@ class TestStrategyHealth:
 
     def test_cost_robustness_fail(self):
         report = _mock_research_report()
-        report["costStress"] = {"base_expectancy": 100, "stress_expectancy": -20, "cost_drag_pct": 60}
+        report["costStress"] = {
+            "base_expectancy": 100,
+            "stress_expectancy": -20,
+            "cost_drag_pct": 60,
+        }
         assessment = assess_strategy_health("test", "1.0.0", report)
         cr = next(c for c in assessment.components if c.name == "Cost Robustness")
         assert cr.passed is False

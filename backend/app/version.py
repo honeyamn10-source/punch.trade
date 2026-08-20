@@ -10,7 +10,7 @@ from __future__ import annotations
 import functools
 import subprocess
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 
 @functools.lru_cache(maxsize=1)

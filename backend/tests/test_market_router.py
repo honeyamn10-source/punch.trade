@@ -5,7 +5,7 @@ All providers are fakes; no network calls happen.
 
 import pytest
 
-from app.instruments import AssetClass, parse_instrument
+from app.instruments import AssetClass
 from app.market_router import MarketRouter
 from app.providers.base import (
     HealthState,
@@ -42,7 +42,17 @@ class FakeProvider(MarketDataProvider):
         if self.state != HealthState.READY:
             raise ProviderError(ProviderErrorCode.PROVIDER_OFFLINE, f"{self.provider_id} down")
         return [
-            candle_dict(instrument.symbol, timeframe, 1786900000 + 60 * i, 100.0, 101.0, 99.0, 100.5, 10.0, self.provider_id)
+            candle_dict(
+                instrument.symbol,
+                timeframe,
+                1786900000 + 60 * i,
+                100.0,
+                101.0,
+                99.0,
+                100.5,
+                10.0,
+                self.provider_id,
+            )
             for i in range(3)
         ]
 
@@ -85,7 +95,10 @@ class TestRouting:
         )
         with pytest.raises(ProviderError) as ei:
             r.get_quote("BTC/USDT")
-        assert ei.value.code in (ProviderErrorCode.PROVIDER_OFFLINE, ProviderErrorCode.DATA_UNAVAILABLE)
+        assert ei.value.code in (
+            ProviderErrorCode.PROVIDER_OFFLINE,
+            ProviderErrorCode.DATA_UNAVAILABLE,
+        )
 
     def test_no_provider_for_asset(self):
         r = _router({}, {AssetClass.CRYPTO: []})

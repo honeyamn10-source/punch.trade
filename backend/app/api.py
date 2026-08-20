@@ -967,6 +967,107 @@ def risk_sizing(req: SizingReq, _: None = Depends(require_token)) -> dict:
         ) from None
 
 
+@app.get("/api/risk/shield")
+def risk_shield_state(_: None = Depends(require_token)) -> dict:
+    """Risk Shield state — hard gate on all new orders."""
+    return {"shieldOn": risk.shield_on(), "status": risk.status()}
+
+
+class ShieldReq(BaseModel):
+    on: bool
+
+
+@app.post("/api/risk/shield")
+def risk_shield_set(req: ShieldReq, _: None = Depends(require_token)) -> dict:
+    """Engage or lift the Risk Shield (blocks all new orders while on)."""
+    return risk.set_shield(req.on)
+
+
+class StressRunReq(BaseModel):
+    metrics: dict[str, float]
+    scenario_types: list[str] | None = None
+    portfolio_state: dict | None = None
+
+
+@app.get("/api/stress/scenarios")
+def stress_scenarios(_: None = Depends(require_token)) -> dict:
+    """The predefined stress scenarios (metadata only)."""
+    from .stress_lab import StressLab
+
+    return {
+        "scenarios": [
+            {
+                "name": s.name,
+                "type": s.stress_type.value,
+                "description": s.description,
+                "severity": s.severity,
+                "probability": s.probability,
+            }
+            for s in StressLab().scenarios
+        ]
+    }
+
+
+@app.post("/api/stress/run")
+def stress_run(req: StressRunReq, _: None = Depends(require_token)) -> dict:
+    """Run the full stress battery against caller-supplied metrics."""
+    from .stress_lab import StressLab, StressType
+
+    if not req.metrics:
+        raise HTTPException(
+            status_code=400, detail={"code": "METRICS_REQUIRED", "message": "metrics are required"}
+        ) from None
+    lab = StressLab()
+    filter_types = None
+    if req.scenario_types:
+        valid = {t.value for t in StressType}
+        filter_types = [t for t in req.scenario_types if t in valid]
+    results = lab.run_all_scenarios(req.metrics, req.portfolio_state, filter_types)
+    return lab.generate_report(results)
+
+
+class MonteCarloReq(BaseModel):
+    returns: list[float]
+    initial_equity: float = 100000.0
+    iterations: int = 500
+    seed: int = 42
+    periods: int | None = None
+    method: str = "bootstrap"
+
+
+@app.post("/api/v1/analysis/monte-carlo")
+def research_monte_carlo(req: MonteCarloReq, _: None = Depends(require_token)) -> dict:
+    """Monte Carlo + bootstrap expectancy on a returns series."""
+    if len(req.returns) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "NOT_ENOUGH_RETURNS", "message": "need >= 10 returns"},
+        ) from None
+    from .monte_carlo import analyze_monte_carlo_result, bootstrap_expectancy, run_monte_carlo
+
+    result = run_monte_carlo(
+        returns=req.returns,
+        initial_equity=req.initial_equity,
+        iterations=req.iterations,
+        seed=req.seed,
+        periods=req.periods,
+        method=req.method,
+    )
+    return {
+        "analysis": analyze_monte_carlo_result(result),
+        "expectancy": bootstrap_expectancy(
+            req.returns, iterations=min(req.iterations, 200), seed=req.seed
+        ),
+        "config": {
+            "iterations": req.iterations,
+            "method": req.method,
+            "seed": req.seed,
+            "initialEquity": req.initial_equity,
+            "periods": req.periods,
+        },
+    }
+
+
 @app.post("/api/risk/breaker/reset")
 def risk_breaker_reset(_: None = Depends(require_token)) -> dict:
     """Manually reset the circuit breaker (also done by /api/system/stop)."""

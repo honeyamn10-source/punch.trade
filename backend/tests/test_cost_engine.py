@@ -1,14 +1,12 @@
 """Tests for Advanced Cost Engine."""
 
-import pytest
-
 from app.cost_engine import (
-    CostProfile,
-    CostProfileType,
     COST_PROFILES,
     CostEngine,
-    get_cost_profile,
+    CostProfile,
+    CostProfileType,
     estimate_round_trip_cost,
+    get_cost_profile,
 )
 
 

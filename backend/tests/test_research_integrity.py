@@ -1,9 +1,7 @@
 """Tests for trial_ledger, DSR, PBO, final_test_lock."""
 
-import pytest
-
 from app import trial_ledger
-from app.research import deflated_sharpe, pbo, final_test_lock
+from app.research import deflated_sharpe, final_test_lock, pbo
 
 
 def _mock_trial(sharpe: float, train_sharpe: float = 0, test_sharpe: float = 0) -> dict:
@@ -20,7 +18,9 @@ class TestTrialLedger:
         bars = [{"ts": float(i * 60), "close": 100 + i} for i in range(200)]
         splits = (bars[:140], bars[140:170], bars[170:])
         param_snap = {"entry": {"period": 14}, "sl_pct": 1.0}
-        metrics = {"splits": {"train": {"sharpe": 1.2}, "val": {"sharpe": 1.0}, "test": {"sharpe": 0.9}}}
+        metrics = {
+            "splits": {"train": {"sharpe": 1.2}, "val": {"sharpe": 1.0}, "test": {"sharpe": 0.9}}
+        }
         gate = {"passed": True, "score": 85, "checks": []}
 
         rec = trial_ledger.append_trial(
@@ -159,7 +159,12 @@ class TestFinalTestLock:
         assert "min" in result["reason"].lower()
 
     def test_fails_when_gate_failed(self):
-        trial = {"qualityGate": {"passed": False, "checks": [{"name": "val edge positive", "passed": False}]}}
+        trial = {
+            "qualityGate": {
+                "passed": False,
+                "checks": [{"name": "val edge positive", "passed": False}],
+            }
+        }
         result = final_test_lock(trial, test_sharpe=2.0, min_test_sharpe=0.5)
         assert result["locked"] is False
 
@@ -167,9 +172,7 @@ class TestFinalTestLock:
         trial = {
             "qualityGate": {
                 "passed": True,
-                "checks": [
-                    {"name": "test edge positive", "passed": True, "detail": "peeking!"}
-                ],
+                "checks": [{"name": "test edge positive", "passed": True, "detail": "peeking!"}],
             }
         }
         result = final_test_lock(trial, test_sharpe=1.5, min_test_sharpe=0.5)

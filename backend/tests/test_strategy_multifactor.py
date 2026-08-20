@@ -1,18 +1,16 @@
 """Tests for Multi-Factor Equity framework."""
 
-import pytest
-
 from app.strategies.base import SignalDirection
 from app.strategies.multifactor.multifactor import MultiFactorEquity
 
 
 def _sample_multifactor_bars(n: int = 300, with_factors: bool = True) -> list[dict]:
     import numpy as np
-    rng = np.random.RandomState(42)
-    symbols = ["SPY", "QQQ", "IWM", "EFA", "EEM", "GLD", "TLT"]
+
+    np.random.RandomState(42)
     bars = []
     for i in range(n):
-        ts = float(1700000000 + i * 86400)
+        float(1700000000 + i * 86400)
         for sym in ["SPY", "QQQ", "IWM", "EFA", "EEM", "GLD", "TLT"]:
             bar = {
                 "ts": float(1700000000 + i * 86400),
@@ -41,15 +39,37 @@ class TestMultiFactorEquity:
         assert s.warmup_bars == 252
 
     def test_returns_none_before_warmup(self):
-        s = MultiFactorEquity(universe=["SPY"])
-        bars = [{"ts": float(1700000000 + i * 86400), "symbol": "SPY", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1000000} for i in range(100)]
+        MultiFactorEquity(universe=["SPY"])
+        bars = [
+            {
+                "ts": float(1700000000 + i * 86400),
+                "symbol": "SPY",
+                "open": 100,
+                "high": 101,
+                "low": 99,
+                "close": 100,
+                "volume": 1000000,
+            }
+            for i in range(100)
+        ]
         for i in range(100):
             sig = MultiFactorEquity(universe=["SPY"]).generate_signal(bars, i)
             assert sig is None
 
     def test_data_unavailable_without_factors(self):
         s = MultiFactorEquity(universe=["SPY"], require_point_in_time=True)
-        bars = [{"ts": float(1700000000 + i * 86400), "symbol": "SPY", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1000000} for i in range(300)]
+        bars = [
+            {
+                "ts": float(1700000000 + i * 86400),
+                "symbol": "SPY",
+                "open": 100,
+                "high": 101,
+                "low": 99,
+                "close": 100,
+                "volume": 1000000,
+            }
+            for i in range(300)
+        ]
         sig = s.generate_signal(bars, 299)
         assert sig is not None
         assert sig.direction == SignalDirection.FLAT

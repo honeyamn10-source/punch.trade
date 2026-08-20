@@ -1,13 +1,12 @@
 """Tests for Adaptive Multi-Horizon Trend strategy."""
 
-import pytest
-
 from app.strategies.base import SignalDirection
 from app.strategies.trend.adaptive_trend import AdaptiveMultiHorizonTrend
 
 
 def _sample_bars(n: int = 300, trend: str = "up", seed: int = 42) -> list[dict]:
     import numpy as np
+
     rng = np.random.RandomState(seed)
     base = 100.0
     bars = []
@@ -19,16 +18,18 @@ def _sample_bars(n: int = 300, trend: str = "up", seed: int = 42) -> list[dict]:
         else:
             drift = 0.0
         ret = rng.normal(drift, 0.01)
-        base *= (1 + ret)
-        bars.append({
-            "ts": float(1700000000 + i * 300),
-            "symbol": "BTC/USDT",
-            "open": base * (1 + rng.normal(0, 0.001)),
-            "high": base * (1 + abs(rng.normal(0, 0.002))),
-            "low": base * (1 - abs(rng.normal(0, 0.002))),
-            "close": base,
-            "volume": float(rng.lognormal(10, 0.5)),
-        })
+        base *= 1 + ret
+        bars.append(
+            {
+                "ts": float(1700000000 + i * 300),
+                "symbol": "BTC/USDT",
+                "open": base * (1 + rng.normal(0, 0.001)),
+                "high": base * (1 + abs(rng.normal(0, 0.002))),
+                "low": base * (1 - abs(rng.normal(0, 0.002))),
+                "close": base,
+                "volume": float(rng.lognormal(10, 0.5)),
+            }
+        )
     return bars
 
 
