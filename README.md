@@ -3,8 +3,9 @@
 [![CI](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml/badge.svg)](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.3.0-blue)](backend/app/version.py)
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-208%20passing-brightgreen)](backend/tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+
+**Stage:** Research and development. See the CI workflow for current automated checks; live broker execution requires separate validation.
 
 A self-hosted quantitative trading workstation: strategy engine, honest
 backtesting and research, risk-gated execution, and a Chrome extension that
