@@ -1,3 +1,5 @@
+![punch.trade — project cover](https://github.com/honeyamn10-source/honeyamn10-source/blob/main/assets/punch.trade.svg?raw=true)
+
 # punch.trade
 
 [![CI](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml/badge.svg)](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml)
