@@ -3,7 +3,7 @@
 # punch.trade
 
 [![CI](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml/badge.svg)](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](backend/app/version.py)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue)](backend/app/version.py)
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 

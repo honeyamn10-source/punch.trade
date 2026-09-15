@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an idea for punch.trade
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem would this feature solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should it behave? Which area does it affect — strategy, research, risk, execution, extension, UI?
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk consideration
+      description: If this touches order execution or the risk gate, explain the safety model.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Papers, references, or design notes.
