@@ -1,32 +1,26 @@
-![punch.trade — project cover](https://github.com/honeyamn10-source/honeyamn10-source/blob/main/assets/punch.trade.svg?raw=true)
+<p align="center"><img src="docs/assets/readme-cover.svg" alt="punch.trade — Research first. Paper execution next." width="100%"></p>
 
-# punch.trade
+<h1 align="center">punch.trade</h1>
+<p align="center"><strong>Research first. Paper execution next.</strong></p>
+<p align="center"><a href="#project-at-a-glance">Overview</a> · <a href="#start-here">Start here</a> · <a href="#project-guide">Project guide</a> · <a href="https://github.com/honeyamn10-source/punch.trade/issues">Issues</a></p>
 
 [![CI](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml/badge.svg)](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](backend/app/version.py)
-[![Python](https://img.shields.io/badge/python-3.11+-blue)](pyproject.toml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-**Stage:** Research and development. See the CI workflow for current automated checks; live broker execution requires separate validation.
+Trading research, a local dashboard and risk-gated broker adapters.
 
-A self-hosted quantitative trading workstation: strategy engine, honest
-backtesting and research, risk-gated execution, and a Chrome extension that
-overlays live signals on the chart pages you already use.
+## Project at a glance
 
-> **Non-custodial by design.** Orders execute through *your* broker account
-> with *your* tokens. punch.trade never holds money — it stores encrypted
-> access tokens at rest and proxies orders. No cloud service, no third
-> parties, no data leaving your machine.
+| Current scope | Release boundary |
+| --- | --- |
+| **Research and development** | Broker integration and live execution claims require separate evidence. |
 
-```
-market data ──▶ strategy engine ──▶ signal ──▶ WebSocket ──▶ extension overlay
-                       │
-                   backtest            backtest       PUNCH button
-                   (same code)                          │
-                       │                                 ▼
-                  win rate / drawdown          broker API (your account)
-                                              entry + TP + SL as one bracket
-```
+## Start here
+
+Use the setup commands in the project guide below. Check configuration and current workflow results before deploying.
+
+Market-data and broker integrations send requests to external services. Self-hosting keeps your application under your control; it does not make connected trading offline. Start in research/paper mode.
+
+## Project guide
 
 ## Features
 
