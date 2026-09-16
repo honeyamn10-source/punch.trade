@@ -1,5 +1,5 @@
 fastapi>=0.141.1
-uvicorn[standard]>=0.29
+uvicorn[standard]>=0.52.4
 kiteconnect[ws]>=5.2
 ccxt>=4.5.78
 cryptography>=42.0
