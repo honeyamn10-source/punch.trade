@@ -1,0 +1,16 @@
+# Normalize line endings on checkout; text files default to LF.
+* text=auto
+
+# PowerShell: CRLF on Windows checkouts, LF in the repo.
+*.ps1 text eol=crlf
+*.sh  text eol=lf
+
+# Binary artifacts stay binary.
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary
+*.db binary
+*.db-wal binary
+*.db-shm binary
+*.pyc binary

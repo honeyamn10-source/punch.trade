@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a problem with punch.trade
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start backend with `python run.py`
+        2. Configure '...'
+        3. Run '...'
+        4. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: punch.trade version
+      description: Version from backend/app/version.py, plus Python and OS.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (sanitized)
+      description: Paste relevant logs with request IDs. Never include broker tokens or account details.
+      render: shell
+  - type: textarea
+    id: mode
+    attributes:
+      label: Mode
+      description: research / paper / live — and the broker adapter used.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I confirm this report contains no tokens, broker credentials, or account identifiers.
+          required: true
