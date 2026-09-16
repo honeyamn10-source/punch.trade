@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
+<title id="title">punch.trade</title><desc id="desc">Research first. Paper execution next. — project identity artwork.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1220"/><stop offset="1" stop-color="#19253a"/></linearGradient></defs>
+<rect width="1280" height="360" rx="24" fill="url(#bg)"/><path d="M940 0V360M1020 0V360M1100 0V360M1180 0V360M900 80H1280M900 160H1280M900 240H1280M900 320H1280" stroke="#ffffff" opacity=".06"/>
+<circle cx="1100" cy="175" r="104" fill="none" stroke="#c4b5fd" stroke-width="2" opacity=".5"/><circle cx="1100" cy="175" r="63" fill="none" stroke="#c4b5fd" stroke-width="2" opacity=".7"/><rect x="1078" y="153" width="44" height="44" rx="10" fill="#c4b5fd"/>
+<rect x="56" y="52" width="4" height="20" rx="2" fill="#c4b5fd"/><text x="76" y="68" font-family="Arial,sans-serif" font-size="16" letter-spacing="3" fill="#c4b5fd">TRADING RESEARCH</text>
+<text x="56" y="166" font-family="Arial,sans-serif" font-weight="700" font-size="60" fill="#f8fafc">punch.trade</text>
+<text x="58" y="218" font-family="Arial,sans-serif" font-size="24" fill="#cbd5e1">Research first. Paper execution next.</text>
+<path d="M58 273H850" stroke="#334155"/><text x="58" y="313" font-family="Arial,sans-serif" font-size="16" fill="#94a3b8">HONEYAMN10-SOURCE / RESEARCH AND DEVELOPMENT</text></svg>
