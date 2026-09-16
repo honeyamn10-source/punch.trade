@@ -1,6 +1,10 @@
 <!-- punch.trade | Bittu Sharma | ultra-level professional README -->
 <p align="center">
-  <img src="docs/assets/logo.svg" alt="Punch Trade logo" width="100%" />
+  <img src="docs/assets/logo.svg" alt="punch.trade logo" width="100%" />
+</p>
+
+
+<p align="center">
 </p>
 
 
