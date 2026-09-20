@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>punch.trade — algorithmic trading platform</title>
+  <meta name="description" content="punch.trade is a comprehensive algorithmic trading platform with backtesting, strategy research, portfolio management, and live execution. Built with FastAPI, PostgreSQL, and modern Python.">
+  <meta name="keywords" content="algorithmic trading, backtesting, quant, portfolio management, fastapi, python, trading bot">
+  <meta name="author" content="Bittu Sharma">
+  <link rel="canonical" href="https://honeyamn10-source.github.io/punch.trade/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="punch.trade">
+  <meta property="og:title" content="punch.trade — algorithmic trading platform">
+  <meta property="og:description" content="Backtesting, strategy research, portfolio management, and live execution. 437 tests, production-ready.">
+  <meta property="og:url" content="https://honeyamn10-source.github.io/punch.trade/">
+  <meta property="og:image" content="https://honeyamn10-source.github.io/punch.trade/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="punch.trade — algorithmic trading platform">
+  <meta name="twitter:description" content="Backtesting, strategy research, portfolio management. 437 tests.">
+  <meta name="twitter:image" content="https://honeyamn10-source.github.io/punch.trade/og.png">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#10b981">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="assets/site.css">
+  <link rel="sitemap" type="application/xml" href="sitemap.xml">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "punch.trade",
+    "url": "https://honeyamn10-source.github.io/punch.trade/",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Linux, macOS, Windows (Python 3.11+)",
+    "description": "Algorithmic trading platform with backtesting, strategy research, and live execution.",
+    "author": { "@type": "Person", "name": "Bittu Sharma" },
+    "codeRepository": "https://github.com/honeyamn10-source/punch.trade"
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top" aria-label="punch.trade home">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#10b981"/><text x="32" y="45" font-family="ui-monospace,Consolas,monospace" font-size="34" font-weight="700" fill="#0b0e14" text-anchor="middle">P</text></svg>
+        punch.trade
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#modules">Modules</a>
+        <a href="#testing">Testing</a>
+        <a href="#brokers">Brokers</a>
+        <a href="https://github.com/honeyamn10-source/punch.trade" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <button class="theme-toggle" type="button" aria-label="Switch theme">☀️</button>
+      <button class="nav-burger" type="button" aria-expanded="false" aria-label="Toggle navigation">☰</button>
+    </div>
+  </header>
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="wrap">
+        <div class="hero-grid">
+          <div class="hero-inner">
+            <span class="status"><span class="dot" aria-hidden="true"></span> v0.4.0 · MIT · Python 3.11+</span>
+            <h1>Algorithmic trading, engineered.</h1>
+            <p class="lede">punch.trade is a production-grade trading platform with comprehensive backtesting, strategy research, portfolio management, risk controls, and multi-broker execution. 437 tests ensure reliability.</p>
+            <div class="btn-row">
+              <a class="btn btn-primary" href="#features">Explore features</a>
+              <a class="btn btn-ghost" href="https://github.com/honeyamn10-source/punch.trade" target="_blank" rel="noopener">View on GitHub</a>
+            </div>
+          </div>
+          <div class="term" role="img" aria-label="Terminal capture showing backtest results">
+            <div class="term-bar"><i class="t1"></i><i class="t2"></i><i class="t3"></i><span>punch backtest</span></div>
+            <div class="term-body">
+$ <span class="c1">punch backtest</span> --strategy rsi_mean_reversion --symbol AAPL --start 2024-01-01
+<span class="dim">Loading data... 252 bars</span>
+<span class="dim">Running backtest... 100%</span>
+<span class="c2">Results:</span>
+  Total Return:     <span class="c3">+23.4%</span>
+  Sharpe Ratio:     <span class="c3">1.87</span>
+  Max Drawdown:     <span class="c4">-8.2%</span>
+  Win Rate:         <span class="c3">64%</span>
+  Profit Factor:    <span class="c3">2.14</span>
+  Trades:           156
+<span class="dim">Monte Carlo (1000 runs): 95% CI [+18.1%, +29.7%]</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section">
+      <div class="wrap">
+        <h2>Features</h2>
+        <div class="grid cards">
+          <article class="card"><h3>Backtesting Engine</h3><p>Event-driven, vectorized, and hybrid modes. Purged CV, walk-forward, Monte Carlo.</p></article>
+          <article class="card"><h3>Strategy Research</h3><p>Signal generation, regime detection, factor analysis, alternative data integration.</p></article>
+          <article class="card"><h3>Portfolio Management</h3><p>Multi-asset, multi-strategy. Position sizing, risk parity, Kelly criterion.</p></article>
+          <article class="card"><h3>Risk Controls</h3><p>Real-time risk limits, drawdown controls, correlation monitoring, stress testing.</p></article>
+          <article class="card"><h3>Live Execution</h3><p>Multi-broker (Zerodha Kite, CCXT crypto). Smart order routing, TCA.</p></article>
+          <article class="card"><h3>Observability</h3><p>Structured logging, metrics, tracing. PnL attribution, strategy health.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="modules" class="section alt">
+      <div class="wrap">
+        <h2>Core Modules (backend/app/)</h2>
+        <div class="grid cards">
+          <article class="card"><h3>ai</h3><p>ML-powered signals, regime detection</p></article>
+          <article class="card"><h3>backtest</h3><p>Engine, analytics, Monte Carlo, walk-forward</p></article>
+          <article class="card"><h3>broker</h3><p>Kite, CCXT, paper trading adapters</p></article>
+          <article class="card"><h3>engine</h3><p>Strategy execution, order management</p></article>
+          <article class="card"><h3>portfolio_brain</h3><p>Allocation, rebalancing, risk budgets</p></article>
+          <article class="card"><h3>risk</h3><p>Limits, stress tests, correlation</p></article>
+          <article class="card"><h3>strategies</h3><p>Built-in & custom strategy framework</p></article>
+          <article class="card"><h3>vault</h3><p>Secrets, API keys, credentials</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="testing" class="section">
+      <div class="wrap">
+        <h2>Testing</h2>
+        <ul class="doc-links">
+          <li><strong>437 tests</strong> collected across backend/tests/</li>
+          <li>Unit tests for each module (engine, risk, portfolio, strategies, etc.)</li>
+          <li>Integration tests for broker adapters</li>
+          <li>Backtest validation tests (purged CV, walk-forward)</li>
+          <li>Slow suite (>280s) — run with <code>pytest -x</code> for fast feedback</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="brokers" class="section alt">
+      <div class="wrap">
+        <h2>Supported Brokers</h2>
+        <div class="grid cards">
+          <article class="card"><h3>Zerodha Kite</h3><p>Indian equities, F&O, commodities. Native KiteConnect integration.</p></article>
+          <article class="card"><h3>CCXT</h3><p>100+ crypto exchanges. Unified interface for spot/futures.</p></article>
+          <article class="card"><h3>Paper Trading</h3><p>Simulated execution for strategy validation.</p></article>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="footer">
+    <div class="wrap">
+      <p>punch.trade v0.4.0 · <a href="https://github.com/honeyamn10-source/punch.trade">GitHub</a> · MIT License</p>
+    </div>
+  </footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>
