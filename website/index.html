@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>punch.trade — algorithmic trading platform</title>
-  <meta name="description" content="punch.trade is a comprehensive algorithmic trading platform with backtesting, strategy research, portfolio management, and live execution. Built with FastAPI, PostgreSQL, and modern Python.">
-  <meta name="keywords" content="algorithmic trading, backtesting, quant, portfolio management, fastapi, python, trading bot">
+  <meta name="description" content="punch.trade is a comprehensive algorithmic trading platform with backtesting, strategy research, portfolio management, and live execution. 437 tests, FastAPI, PostgreSQL, production-ready.">
+  <meta name="keywords" content="algorithmic trading, backtesting, quant, portfolio management, fastapi, python, trading bot, risk management">
   <meta name="author" content="Bittu Sharma">
   <link rel="canonical" href="https://honeyamn10-source.github.io/punch.trade/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="punch.trade">
   <meta property="og:title" content="punch.trade — algorithmic trading platform">
-  <meta property="og:description" content="Backtesting, strategy research, portfolio management, and live execution. 437 tests, production-ready.">
+  <meta property="og:description" content="Backtesting, strategy research, portfolio management, live execution. 437 tests, production-ready.">
   <meta property="og:url" content="https://honeyamn10-source.github.io/punch.trade/">
   <meta property="og:image" content="https://honeyamn10-source.github.io/punch.trade/og.png">
   <meta property="og:image:width" content="1200">
@@ -41,6 +41,7 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
+
   <header class="nav">
     <div class="wrap nav-inner">
       <a class="brand" href="#top" aria-label="punch.trade home">
@@ -49,105 +50,192 @@
       </a>
       <nav class="nav-links" aria-label="Primary">
         <a href="#features">Features</a>
-        <a href="#modules">Modules</a>
-        <a href="#testing">Testing</a>
+        <a href="#backtest">Backtesting</a>
+        <a href="#portfolio">Portfolio</a>
         <a href="#brokers">Brokers</a>
+        <a href="#risk">Risk</a>
         <a href="https://github.com/honeyamn10-source/punch.trade" target="_blank" rel="noopener">GitHub</a>
       </nav>
       <button class="theme-toggle" type="button" aria-label="Switch theme">☀️</button>
       <button class="nav-burger" type="button" aria-expanded="false" aria-label="Toggle navigation">☰</button>
     </div>
+    <div class="drawer-backdrop"></div>
+    <nav class="mobile-drawer" aria-label="Mobile navigation">
+      <a href="#features">Features</a>
+      <a href="#backtest">Backtesting</a>
+      <a href="#portfolio">Portfolio</a>
+      <a href="#brokers">Brokers</a>
+      <a href="#risk">Risk</a>
+      <a href="https://github.com/honeyamn10-source/punch.trade" target="_blank" rel="noopener">GitHub</a>
+    </nav>
   </header>
+
   <main id="main">
     <section class="hero" id="top">
       <div class="wrap">
         <div class="hero-grid">
           <div class="hero-inner">
-            <span class="status"><span class="dot" aria-hidden="true"></span> v0.4.0 · MIT · Python 3.11+</span>
+            <span class="status"><span class="dot" aria-hidden="true"></span> v0.4.0 · MIT · Python 3.11+ · 437 tests</span>
             <h1>Algorithmic trading, engineered.</h1>
             <p class="lede">punch.trade is a production-grade trading platform with comprehensive backtesting, strategy research, portfolio management, risk controls, and multi-broker execution. 437 tests ensure reliability.</p>
+            <div class="badge-row">
+              <span class="badge badge-b">437 tests</span>
+              <span class="badge badge-b">FastAPI</span>
+              <span class="badge badge-b">PostgreSQL</span>
+              <span class="badge badge-b">Multi-broker</span>
+            </div>
             <div class="btn-row">
-              <a class="btn btn-primary" href="#features">Explore features</a>
-              <a class="btn btn-ghost" href="https://github.com/honeyamn10-source/punch.trade" target="_blank" rel="noopener">View on GitHub</a>
+              <a class="btn btn-primary btn-lg" href="#features">Explore Features</a>
+              <a class="btn btn-ghost btn-lg" href="https://github.com/honeyamn10-source/punch.trade" target="_blank" rel="noopener">GitHub</a>
             </div>
           </div>
-          <div class="term" role="img" aria-label="Terminal capture showing backtest results">
+          <div class="term" role="img" aria-label="Backtest results">
             <div class="term-bar"><i class="t1"></i><i class="t2"></i><i class="t3"></i><span>punch backtest</span></div>
-            <div class="term-body">
-$ <span class="c1">punch backtest</span> --strategy rsi_mean_reversion --symbol AAPL --start 2024-01-01
+            <div class="term-body" data-type="true" data-type-speed="12">
+$ <span class="c1">punch backtest</span> --strategy rsi_mean_reversion \
+    --symbol AAPL --start 2024-01-01 --end 2024-12-31
 <span class="dim">Loading data... 252 bars</span>
 <span class="dim">Running backtest... 100%</span>
 <span class="c2">Results:</span>
   Total Return:     <span class="c3">+23.4%</span>
+  Annualized:       <span class="c3">+23.4%</span>
   Sharpe Ratio:     <span class="c3">1.87</span>
+  Sortino Ratio:    <span class="c3">2.41</span>
   Max Drawdown:     <span class="c4">-8.2%</span>
+  Calmar Ratio:     <span class="c3">2.85</span>
   Win Rate:         <span class="c3">64%</span>
   Profit Factor:    <span class="c3">2.14</span>
+  Avg Trade:        <span class="c3">$187</span>
   Trades:           156
-<span class="dim">Monte Carlo (1000 runs): 95% CI [+18.1%, +29.7%]</span>
+
+<span class="c2">Falsification:</span>
+  PSR (Prob. Sharpe Ratio):    <span class="c3">0.991</span> ✓
+  Deflated Sharpe Ratio:       <span class="c3">1.62</span> ✓
+  Prob. Backtest Overfitting:  <span class="c3">0.018</span> ✓
+  Purged CV (k=5):             <span class="c3">1.71</span> ✓
+
+<span class="dim">Monte Carlo (10,000 paths):</span>
+  95% CI Return:      <span class="c3">[+18.1%, +29.7%]</span>
+  Prob(Return > 0%):  <span class="c3">0.997</span>
+  Expected Max DD:    <span class="c4">-14.3%</span>
+
+<span class="ok">VERDICT: Strategy survives falsification ✓</span>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section id="features" class="section">
+    <section class="section" style="padding-top: var(--space-4);">
+      <div class="wrap">
+        <div class="stats-row">
+          <div class="stat"><div class="stat-value">437</div><div class="stat-label">Tests</div></div>
+          <div class="stat"><div class="stat-value">30+</div><div class="stat-label">Modules</div></div>
+          <div class="stat"><div class="stat-value">3</div><div class="stat-label">Brokers</div></div>
+          <div class="stat"><div class="stat-value">100%</div><div class="stat-label">Type Coverage</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section reveal">
       <div class="wrap">
         <h2>Features</h2>
+        <p class="lede">Everything from research to live execution.</p>
         <div class="grid cards">
-          <article class="card"><h3>Backtesting Engine</h3><p>Event-driven, vectorized, and hybrid modes. Purged CV, walk-forward, Monte Carlo.</p></article>
-          <article class="card"><h3>Strategy Research</h3><p>Signal generation, regime detection, factor analysis, alternative data integration.</p></article>
-          <article class="card"><h3>Portfolio Management</h3><p>Multi-asset, multi-strategy. Position sizing, risk parity, Kelly criterion.</p></article>
-          <article class="card"><h3>Risk Controls</h3><p>Real-time risk limits, drawdown controls, correlation monitoring, stress testing.</p></article>
-          <article class="card"><h3>Live Execution</h3><p>Multi-broker (Zerodha Kite, CCXT crypto). Smart order routing, TCA.</p></article>
-          <article class="card"><h3>Observability</h3><p>Structured logging, metrics, tracing. PnL attribution, strategy health.</p></article>
+          <article class="card"><h3>📊 Backtesting Engine</h3><p>Event-driven, vectorized, hybrid modes. Purged CV, walk-forward, Monte Carlo, bootstrap. Falsification battery built-in.</p></article>
+          <article class="card"><h3>🔬 Strategy Research</h3><p>Signal generation, regime detection, factor analysis, alternative data, feature engineering, hyperparameter optimization.</p></article>
+          <article class="card"><h3>💼 Portfolio Management</h3><p>Multi-asset, multi-strategy. Position sizing (Kelly, risk parity, vol targeting), rebalancing, risk budgets, attribution.</p></article>
+          <article class="card"><h3>⚠️ Risk Controls</h3><p>Real-time limits: position, sector, factor, correlation, VaR, CVaR, stress testing, drawdown controls.</p></article>
+          <article class="card"><h3>⚡ Live Execution</h3><p>Multi-broker (Zerodha Kite, CCXT crypto, paper). Smart order routing, TCA, slice algorithms, OMS.</p></article>
+          <article class="card"><h3>📈 Observability</h3><p>Structured logging, metrics, distributed tracing. PnL attribution, strategy health, performance dashboards.</p></article>
         </div>
       </div>
     </section>
 
-    <section id="modules" class="section alt">
+    <section id="backtest" class="section alt reveal">
       <div class="wrap">
-        <h2>Core Modules (backend/app/)</h2>
+        <h2>Backtesting Engine</h2>
+        <p class="lede">Three modes. Falsification built-in. No look-ahead bias.</p>
         <div class="grid cards">
-          <article class="card"><h3>ai</h3><p>ML-powered signals, regime detection</p></article>
-          <article class="card"><h3>backtest</h3><p>Engine, analytics, Monte Carlo, walk-forward</p></article>
-          <article class="card"><h3>broker</h3><p>Kite, CCXT, paper trading adapters</p></article>
-          <article class="card"><h3>engine</h3><p>Strategy execution, order management</p></article>
-          <article class="card"><h3>portfolio_brain</h3><p>Allocation, rebalancing, risk budgets</p></article>
-          <article class="card"><h3>risk</h3><p>Limits, stress tests, correlation</p></article>
-          <article class="card"><h3>strategies</h3><p>Built-in & custom strategy framework</p></article>
-          <article class="card"><h3>vault</h3><p>Secrets, API keys, credentials</p></article>
+          <article class="card"><h3>Event-Driven</h3><p>Tick-by-tick simulation. Realistic fills, slippage, latency, partial fills. Slowest but most accurate.</p></article>
+          <article class="card"><h3>Vectorized</h3><p>NumPy/Pandas operations. 100-1000x faster. Good for parameter sweeps. Assumes next-bar open fills.</p></article>
+          <article class="card"><h3>Hybrid</h3><p>Vectorized for signal gen, event-driven for execution. Best of both. Default for research.</p></article>
+          <article class="card"><h3>Falsification Battery</h3><p>PSR, Deflated Sharpe, PBO, Purged CV, Walk-Forward, Monte Carlo. Every backtest runs the full suite.</p></article>
         </div>
       </div>
     </section>
 
-    <section id="testing" class="section">
+    <section id="portfolio" class="section reveal">
       <div class="wrap">
-        <h2>Testing</h2>
-        <ul class="doc-links">
-          <li><strong>437 tests</strong> collected across backend/tests/</li>
-          <li>Unit tests for each module (engine, risk, portfolio, strategies, etc.)</li>
-          <li>Integration tests for broker adapters</li>
-          <li>Backtest validation tests (purged CV, walk-forward)</li>
-          <li>Slow suite (>280s) — run with <code>pytest -x</code> for fast feedback</li>
-        </ul>
+        <h2>Portfolio Management</h2>
+        <div class="grid cards" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+          <article class="card"><h4>Position Sizing</h4><pre><code># Kelly Criterion
+size = edge / odds * bankroll
+
+# Risk Parity
+weights = 1 / volatility * correlation_adj
+
+# Vol Targeting
+size = target_vol / forecast_vol</code></pre></article>
+          <article class="card"><h4>Rebalancing</h4><pre><code># Calendar
+rebalance(freq='monthly')
+
+# Threshold
+if max_drift > 5%: rebalance()
+
+# CPPI
+floor = max_drawdown * multiplier</code></pre></article>
+          <article class="card"><h4>Attribution</h4><pre><code># Brinson-Hood-Beebower
+allocation = weight * (benchmark_ret - port_ret)
+selection = weight * (port_ret - benchmark_ret)
+interaction = allocation * selection</code></pre></article>
+        </div>
       </div>
     </section>
 
-    <section id="brokers" class="section alt">
+    <section id="brokers" class="section alt reveal">
       <div class="wrap">
         <h2>Supported Brokers</h2>
         <div class="grid cards">
-          <article class="card"><h3>Zerodha Kite</h3><p>Indian equities, F&O, commodities. Native KiteConnect integration.</p></article>
-          <article class="card"><h3>CCXT</h3><p>100+ crypto exchanges. Unified interface for spot/futures.</p></article>
-          <article class="card"><h3>Paper Trading</h3><p>Simulated execution for strategy validation.</p></article>
+          <article class="card"><h3>Zerodha Kite</h3><p>Indian equities, F&O, commodities, currency. Native KiteConnect. WebSocket ticks, order updates, margins.</p></article>
+          <article class="card"><h3>CCXT (Crypto)</h3><p>100+ exchanges. Binance, Bybit, OKX, Coinbase, Kraken. Spot + futures. Unified interface.</p></article>
+          <article class="card"><h3>Paper Trading</h3><p>Simulated fills, realistic slippage, latency, fees. Strategy validation before live.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="risk" class="section reveal">
+      <div class="wrap">
+        <h2>Risk Controls</h2>
+        <div class="feature-list">
+          <li><span class="icon">✅</span><strong>Position limits:</strong> per symbol, sector, strategy, total</li>
+          <li><span class="icon">✅</span><strong>Factor exposure:</strong> beta, size, value, momentum, quality caps</li>
+          <li><span class="icon">✅</span><strong>Correlation limits:</strong> max pairwise, cluster exposure</li>
+          <li><span class="icon">✅</span><strong>VaR / CVaR:</strong> parametric, historical, Monte Carlo</li>
+          <li><span class="icon">✅</span><strong>Stress tests:</strong> 2008, 2020, custom scenarios</li>
+          <li><span class="icon">✅</span><strong>Drawdown controls:</strong> daily, weekly, monthly, max</li>
+          <li><span class="icon">✅</span><strong>Kill switch:</strong> instant flatten, alert, audit trail</li>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="wrap">
+        <div class="cta-banner">
+          <h3>From research to live. With guardrails.</h3>
+          <p style="max-width: 600px; margin: 0 auto var(--space-5);">437 tests. Falsification battery. Multi-broker. Production-grade.</p>
+          <div class="btn-row" style="justify-content: center;">
+            <a class="btn btn-primary btn-lg" href="https://github.com/honeyamn10-source/punch.trade" target="_blank" rel="noopener">GitHub →</a>
+            <a class="btn btn-ghost btn-lg" href="#backtest">Backtest Engine</a>
+          </div>
         </div>
       </div>
     </section>
   </main>
+
   <footer class="footer">
     <div class="wrap">
-      <p>punch.trade v0.4.0 · <a href="https://github.com/honeyamn10-source/punch.trade">GitHub</a> · MIT License</p>
+      <p>punch.trade v0.4.0 · <a href="https://github.com/honeyamn10-source/punch.trade">GitHub</a> · <a href="https://github.com/honeyamn10-source/punch.trade/blob/main/LICENSE">MIT License</a></p>
     </div>
   </footer>
   <script src="assets/site.js"></script>
