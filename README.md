@@ -1,84 +1,48 @@
-<!-- punch.trade | Bittu Sharma | ultra-level professional README -->
-<p align="center">
-  <img src="docs/assets/logo.svg" alt="punch.trade logo" width="100%" />
-</p>
+![punch.trade](docs/assets/cover.svg)
 
+# punch.trade
 
-<p align="center">
-</p>
+A FastAPI workstation with strategy research, backtesting, risk controls, a local dashboard and a Chrome extension.
 
+[Project website](https://honeyamn10-source.github.io/punch.trade/) · [Build results](https://github.com/honeyamn10-source/punch.trade/actions)
 
-<p align="center">
-  <strong style="font-size:3rem;color:#0EA5E9;">punch.trade</strong>
-</p>
-<p align="center">
-  <em style="font-size:1.2rem;color:#94A3B8;">Trading automation platform with honest backtests</em>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-Python-blue?logo=python&logoColor=white" alt="Python"/>  <img src="https://img.shields.io/badge/FastAPI-FastAPI-blue?logo=fastapi&logoColor=white" alt="FastAPI"/>  <img src="https://img.shields.io/badge/PostgreSQL-PostgreSQL-blue?logo=postgresql&logoColor=white" alt="PostgreSQL"/>  <img src="https://img.shields.io/badge/Redis-Redis-blue?logo=redis&logoColor=white" alt="Redis"/>
-  <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License"/>
-  <img src="https://img.shields.io/badge/Loopback-Only-0EA5E9" alt="Loopback Only"/>
-  <img src="https://img.shields.io/badge/ADR-Trail%20(0001..0003)-F59E0B" alt="ADR Trail"/>
-</p>
+## What it does
 
----
+- **Inspect strategies.** Explore strategy modules, research tools and backtests.
+- **Review risk.** Risk and execution layers sit between a signal and an order.
+- **Start in paper mode.** The default feed is synthetic and execution is paper unless explicitly configured.
 
-## Why this exists
+## Start from source
 
-A professional trading automation platform with honest backtests built to the portfolio ultra-level standard:
-honest code, loopback-only demos, zero personal emails in history, and every
-architectural decision recorded in the ADR trail.
-
----
-
-## Quick Start
+Python and the dependencies in backend/requirements.txt. Review .env.example and the deployment guide.
 
 ```bash
-# Clone and install
 git clone https://github.com/honeyamn10-source/punch.trade.git
 cd punch.trade
-# Follow repo-specific setup instructions
+python -m pip install -r backend/requirements.txt
+cd backend
+python run.py
 ```
 
----
+## Verify
 
-## Features
-
-- Professional codebase with full test coverage
-- Loopback-only serving — zero unauthenticated remote access
-- ADR trail documenting all architectural decisions
-- CI/CD pipeline with lint, test, typecheck, and build
-- Professional identity on all commits
-
----
-
-## Architecture
-
-```mermaid
-graph TB
-    subgraph "Client"
-        UI[Web UI / CLI]
-    end
-    subgraph "Server"
-        API[API Layer]
-        DB[(Database)]
-    end
-    UI --> API
-    API --> DB
-    API -->|Loopback Only| LB[127.0.0.1]
+```bash
+cd backend
+python -m pytest tests -q
 ```
 
----
+## Scope
 
-## Security
+Development workstation. Broker adapters require independent verification. Backtests do not establish future returns; synthetic feed and paper execution are the defaults.
 
-- Loopback-only serving (127.0.0.1)
-- Professional commit identity
-- Zero personal emails in history
-- ADR trail for all decisions
+## Find your way around
 
----
+- [Architecture](docs/ARCHITECTURE.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Test guide](docs/TESTING.md)
 
-## License
+## Contributing and license
 
-MIT © 2026 Bittu Sharma
+See [CONTRIBUTING.md](CONTRIBUTING.md). Include a minimal reproduction and runtime versions with bug reports; remove credentials from logs.
+
+MIT — see [LICENSE](LICENSE). Third-party dependencies retain their applicable licenses.
