@@ -2,6 +2,20 @@
 
 # punch.trade
 
+<!-- repo-badges:start -->
+<div align="center">
+
+[![Stars](https://img.shields.io/github/stars/honeyamn10-source/punch.trade?style=flat-square&logo=github&label=Stars)](https://github.com/honeyamn10-source/punch.trade/stargazers)
+[![Forks](https://img.shields.io/github/forks/honeyamn10-source/punch.trade?style=flat-square&logo=github&label=Forks)](https://github.com/honeyamn10-source/punch.trade/forks)
+[![Issues](https://img.shields.io/github/issues/honeyamn10-source/punch.trade?style=flat-square&logo=github&label=Issues)](https://github.com/honeyamn10-source/punch.trade/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/honeyamn10-source/punch.trade?style=flat-square&logo=github&label=Last%20Commit)](https://github.com/honeyamn10-source/punch.trade/commits/master)
+
+[Repository](https://github.com/honeyamn10-source/punch.trade) · [Issues](https://github.com/honeyamn10-source/punch.trade/issues) · [Pull Requests](https://github.com/honeyamn10-source/punch.trade/pulls) · [Actions](https://github.com/honeyamn10-source/punch.trade/actions)
+
+</div>
+<!-- repo-badges:end -->
+
+
 A FastAPI workstation with strategy research, backtesting, risk controls, a local dashboard and a Chrome extension.
 
 [Project website](https://honeyamn10-source.github.io/punch.trade/) · [Build results](https://github.com/honeyamn10-source/punch.trade/actions)
