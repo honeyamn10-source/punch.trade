@@ -15,6 +15,18 @@
 </div>
 <!-- repo-badges:end -->
 
+<!-- professional-meta:start -->
+<div align="center">
+
+[![ci](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/honeyamn10-source/punch.trade/actions/workflows/ci.yml) [![codeql](https://github.com/honeyamn10-source/punch.trade/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/honeyamn10-source/punch.trade/actions/workflows/codeql.yml)
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white) ![Browser Extension](https://img.shields.io/badge/Browser%20Extension-4285F4?style=flat-square&logo=googlechrome&logoColor=white) ![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white)
+
+[Documentation](docs) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+
+</div>
+<!-- professional-meta:end -->
+
 
 A FastAPI workstation with strategy research, backtesting, risk controls, a local dashboard and a Chrome extension.
 
