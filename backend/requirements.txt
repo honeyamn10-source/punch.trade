@@ -5,4 +5,4 @@ ccxt>=4.5.78
 cryptography>=42.0
 httpx>=0.28.1
 numpy>=1.26
-scipy>=1.11
+scipy>=1.18.1
