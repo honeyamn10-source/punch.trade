@@ -1,0 +1,2 @@
+# envguard suppression rules for intentional fixtures / reviewed false positives.
+# Keep this list minimal and review it when detector rules change.
