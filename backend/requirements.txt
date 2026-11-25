@@ -1,8 +1,8 @@
-fastapi>=0.141.1
+fastapi>=0.165.0
 uvicorn[standard]>=0.29
 kiteconnect[ws]>=5.2.2
-ccxt>=4.5.78
+ccxt>=4.5.93
 cryptography>=42.0
 httpx>=0.28.1
-numpy>=1.26
+numpy>=2.5.5
 scipy>=1.11
