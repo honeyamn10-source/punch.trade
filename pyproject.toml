@@ -16,6 +16,20 @@ dependencies = [
     "httpx>=0.27",
 ]
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# The import package lives at backend/app; pin discovery so editable installs
+# never pick up data/, website/ or extension/ as top-level packages.
+[tool.setuptools]
+package-dir = {"" = "backend"}
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["app*"]
+namespaces = false
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -30,6 +44,7 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
+pythonpath = ["backend"]
 filterwarnings = ["ignore::DeprecationWarning:starlette.testclient"]
 
 [tool.coverage.run]

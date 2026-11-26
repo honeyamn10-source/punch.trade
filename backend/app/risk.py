@@ -133,6 +133,37 @@ def status() -> dict:
 
 
 # ------------------------------------------------------------ the gate --
+def check_execution_gate(*, broker: str) -> None:
+    """Hard kill-switch/mode gate shared by order entry and idempotent replay.
+
+    This is intentionally separate from :func:`check`: a duplicate request must
+    still be refused while the shield is engaged or after an emergency stop,
+    but it should not be re-subjected to feed-staleness or signal-TTL checks.
+    """
+    if _shield_on:
+        raise RiskError(
+            "SHIELD_ACTIVE",
+            "risk shield engaged — all new orders are blocked until it is lifted",
+            status=409,
+        )
+    if _mode == "research":
+        raise RiskError("MODE_BLOCKED", "research mode: order execution is disabled", status=409)
+    if broker == "paper":
+        return
+    if _mode != "live":
+        raise RiskError(
+            "BROKER_NOT_ALLOWED",
+            f"'{broker}' is a real broker — switch to LIVE mode first",
+            status=409,
+        )
+    if broker not in _armed:
+        raise RiskError(
+            "NOT_ARMED",
+            f"broker '{broker}' is not armed for LIVE execution (POST /api/system/arm)",
+            status=409,
+        )
+
+
 def check(
     *,
     broker: str,
@@ -144,29 +175,7 @@ def check(
     stale_after: float | None = None,
 ) -> None:
     """Pre-trade checklist. Raises RiskError on the first failed rule."""
-    if _shield_on:
-        raise RiskError(
-            "SHIELD_ACTIVE",
-            "risk shield engaged — all new orders are blocked until it is lifted",
-            status=409,
-        )
-    if _mode == "research":
-        raise RiskError("MODE_BLOCKED", "research mode: order execution is disabled", status=409)
-    if broker == "paper":
-        pass  # allowed in paper and live modes
-    elif _mode != "live":
-        raise RiskError(
-            "BROKER_NOT_ALLOWED",
-            f"'{broker}' is a real broker — switch to LIVE mode first",
-            status=409,
-        )
-    elif broker not in _armed:
-        raise RiskError(
-            "NOT_ARMED",
-            f"broker '{broker}' is not armed for LIVE execution (POST /api/system/arm)",
-            status=409,
-        )
-
+    check_execution_gate(broker=broker)
     check_circuit_breaker()
     if broker != "paper":
         check_reconciliation()
