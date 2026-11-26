@@ -243,6 +243,54 @@ class BrokerManager:
 brokers = BrokerManager()
 feed: LiveFeed | None = None
 market_router: MarketRouter | None = None
+# Adapters created from vault credentials. Tracked separately from the keyless
+# public market-data adapter so leaving LIVE mode can evict secrets from memory.
+_vault_backed_adapters: set[str] = set()
+
+
+def _install_live_adapter(name: str, adapter: object) -> bool:
+    """Install a credentialed adapter only while the app is in LIVE mode."""
+    if risk.mode() != "live":
+        return False
+    brokers.adapters[name] = adapter
+    _vault_backed_adapters.add(name)
+    return True
+
+
+def _release_live_adapters() -> None:
+    """Drop vault-backed adapters so credentials exist only in the encrypted vault."""
+    for name in tuple(_vault_backed_adapters):
+        brokers.adapters.pop(name, None)
+        _vault_backed_adapters.discard(name)
+
+
+def _restore_live_adapters() -> None:
+    """Restore vault credentials into adapters only for LIVE mode."""
+    if risk.mode() != "live":
+        return
+    for broker_name in vault.brokers():
+        if broker_name in _vault_backed_adapters and broker_name in brokers.adapters:
+            continue
+        try:
+            if broker_name == "kite":
+                creds = vault.load("kite")
+                adapter = KiteAdapter(creds["api_key"], creds["access_token"])
+            elif broker_name == "binance":
+                creds = vault.load("binance")
+                adapter = CCXTBroker(
+                    creds["api_key"], creds["api_secret"], creds.get("testnet", True)
+                )
+            elif broker_name == "openalgo":
+                creds = vault.load("openalgo")
+                adapter = OpenAlgoAdapter(
+                    creds["host"], creds["apikey"], creds.get("broker", "zerodha")
+                )
+            else:
+                continue
+        except Exception as e:  # noqa: BLE001
+            print(f"[startup] failed to restore {broker_name}: {e}")
+            continue
+        _install_live_adapter(broker_name, adapter)
 
 
 # ------------------------------------------------------------ models ----
@@ -353,24 +401,9 @@ async def _startup() -> None:
     # restore the execution ledger (orders + closed trades) from SQLite
     execution.restore()
 
-    # restore broker sessions from the encrypted vault
-    for broker_name in vault.brokers():
-        try:
-            if broker_name == "kite":
-                creds = vault.load("kite")
-                brokers.adapters["kite"] = KiteAdapter(creds["api_key"], creds["access_token"])
-            elif broker_name == "binance":
-                creds = vault.load("binance")
-                brokers.adapters["binance"] = CCXTBroker(
-                    creds["api_key"], creds["api_secret"], creds.get("testnet", True)
-                )
-            elif broker_name == "openalgo":
-                creds = vault.load("openalgo")
-                brokers.adapters["openalgo"] = OpenAlgoAdapter(
-                    creds["host"], creds["apikey"], creds.get("broker", "zerodha")
-                )
-        except Exception as e:
-            print(f"[startup] failed to restore {broker_name}: {e}")
+    # Restore broker sessions only in LIVE mode. Paper/research keep every
+    # credential encrypted in the vault and expose only simulated adapters.
+    _restore_live_adapters()
 
     print(
         f"[startup] telegram alerts: {'ON' if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID else 'OFF'}"
@@ -460,6 +493,22 @@ def _update_signal(signal_id: str, **fields) -> dict | None:
             hub.signals.appendleft(new)
             return new
     return None
+
+
+def _reject_signal(signal_id: str | None, code: str) -> None:
+    """Mark a rejected signal and broadcast the rejection when a loop exists."""
+    if not signal_id:
+        return
+    _update_signal(signal_id, status="REJECTED", rejection=code)
+    if _loop is not None:
+        _loop.create_task(
+            hub.broadcast(
+                {
+                    "type": "signal_update",
+                    "data": {"id": signal_id, "status": "REJECTED", "rejection": code},
+                }
+            )
+        )
 
 
 async def _telegram_push(signal: dict) -> None:
@@ -1127,26 +1176,53 @@ def kite_connect(req: KiteConnectReq, _: None = Depends(require_token)) -> dict:
     except BrokerError as e:
         raise HTTPException(status_code=502, detail=str(e)) from None
     vault.save("kite", session)
-    brokers.adapters["kite"] = KiteAdapter(session["api_key"], session["access_token"])
-    return {"connected": True, "broker": "kite"}
+    active = False
+    if risk.mode() == "live":
+        active = _install_live_adapter(
+            "kite", KiteAdapter(session["api_key"], session["access_token"])
+        )
+    return {
+        "connected": active,
+        "stored": True,
+        "broker": "kite",
+        "simulated": not active,
+        **({} if active else {"reason": "credentials stored; LIVE mode required to connect"}),
+    }
 
 
 @app.post("/api/broker/binance/connect")
 def binance_connect(req: BinanceConnectReq, _: None = Depends(require_token)) -> dict:
-    try:
-        adapter = CCXTBroker(req.api_key, req.api_secret, req.testnet)
-        status = adapter.status()
-    except BrokerError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from None
+    status: dict = {
+        "broker": "binance",
+        "connected": False,
+        "testnet": req.testnet,
+        "account": "sandbox/paper credentials stored",
+        "simulated": True,
+    }
+    if risk.mode() == "live":
+        try:
+            adapter = CCXTBroker(req.api_key, req.api_secret, req.testnet)
+            status = adapter.status()
+        except BrokerError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from None
+        _install_live_adapter("binance", adapter)
     vault.save(
         "binance", {"api_key": req.api_key, "api_secret": req.api_secret, "testnet": req.testnet}
     )
-    brokers.adapters["binance"] = adapter
-    return {"connected": True, "broker": "binance", **status}
+    return {"connected": risk.mode() == "live", "stored": True, **status}
 
 
 @app.post("/api/broker/openalgo/connect")
 def openalgo_connect(req: OpenAlgoConnectReq, _: None = Depends(require_token)) -> dict:
+    vault.save("openalgo", {"host": req.host, "apikey": req.apikey, "broker": req.broker})
+    if risk.mode() != "live":
+        return {
+            "connected": False,
+            "stored": True,
+            "broker": "openalgo",
+            "simulated": True,
+            "reason": "credentials stored; LIVE mode required to connect",
+        }
     adapter = OpenAlgoAdapter(req.host, req.apikey, req.broker)
     try:
         status = adapter.status()
@@ -1154,9 +1230,8 @@ def openalgo_connect(req: OpenAlgoConnectReq, _: None = Depends(require_token)) 
         raise HTTPException(status_code=502, detail=str(e)) from None
     if not status.get("connected"):
         raise HTTPException(status_code=502, detail=f"OpenAlgo at {req.host} unreachable")
-    vault.save("openalgo", {"host": req.host, "apikey": req.apikey, "broker": req.broker})
-    brokers.adapters["openalgo"] = adapter
-    return {"connected": True, "broker": "openalgo", **status}
+    _install_live_adapter("openalgo", adapter)
+    return {"connected": True, "stored": True, "broker": "openalgo", **status}
 
 
 @app.get("/api/broker/status")
@@ -1179,6 +1254,14 @@ def vault_rotate_key(_: None = Depends(require_token)) -> dict:
 
 @app.post("/api/orders")
 async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
+    # Kill switches and mode gates precede idempotent replay: a duplicate
+    # request must never be acknowledged while execution is suspended.
+    try:
+        risk.check_execution_gate(broker=req.broker)
+    except risk.RiskError as e:
+        _reject_signal(req.signalId, e.code)
+        raise _rejection(e) from None
+
     adapter = brokers.get(req.broker)
 
     # ---- idempotency: replay a previous request instead of re-executing
@@ -1259,16 +1342,7 @@ async def place_order(req: OrderReq, _: None = Depends(require_token)) -> dict:
             stop=req.stopLoss,
         )
     except risk.RiskError as e:
-        if req.signalId:
-            _update_signal(req.signalId, status="REJECTED", rejection=e.code)
-            _loop.create_task(
-                hub.broadcast(
-                    {
-                        "type": "signal_update",
-                        "data": {"id": req.signalId, "status": "REJECTED", "rejection": e.code},
-                    }
-                )
-            )
+        _reject_signal(req.signalId, e.code)
         raise _rejection(e) from None
 
     try:
@@ -1668,15 +1742,25 @@ def system_status(_: None = Depends(require_token)) -> dict:
 @app.post("/api/system/mode")
 def system_mode(req: ModeReq, _: None = Depends(require_token)) -> dict:
     try:
-        return risk.set_mode(req.mode)
+        state = risk.set_mode(req.mode)
     except risk.RiskError as e:
         raise _rejection(e) from None
+    if req.mode == "live":
+        _restore_live_adapters()
+    else:
+        _release_live_adapters()
+    return state
 
 
 @app.post("/api/system/arm")
 def system_arm(req: ArmReq, _: None = Depends(require_token)) -> dict:
+    adapter = brokers.adapters.get(req.broker)
+    connected = False
+    if adapter is not None:
+        with contextlib.suppress(Exception):
+            connected = bool(adapter.status().get("connected"))
     try:
-        return risk.arm(req.broker, connected=req.broker in brokers.adapters)
+        return risk.arm(req.broker, connected=connected)
     except risk.RiskError as e:
         raise _rejection(e) from None
 
